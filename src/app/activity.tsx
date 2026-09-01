@@ -1,5 +1,7 @@
 import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Pressable,
     SafeAreaView,
     ScrollView,
@@ -9,60 +11,101 @@ import {
     View,
     useWindowDimensions,
 } from 'react-native';
+import { ensureSession, supabase } from '../lib/supabase';
 
-const events = [
-  {
-    time: '10:42 AM',
-    name: 'Example Customer 01',
-    action: 'Payment reminder',
-    result: 'Promise to pay Friday',
-    next: 'Follow up Friday',
-    type: 'follow',
-    initials: 'EC',
-  },
-  {
-    time: '10:24 AM',
-    name: 'Example Customer 02',
-    action: 'Payment confirmation',
-    result: 'Customer confirmed payment',
-    next: 'No action required',
-    type: 'resolved',
-    initials: 'EC',
-  },
-  {
-    time: '10:08 AM',
-    name: 'Example Customer 03',
-    action: 'Document notification',
-    result: 'Customer requested staff assistance',
-    next: 'Human agent review',
-    type: 'attention',
-    initials: 'EC',
-  },
-  {
-    time: '9:51 AM',
-    name: 'Example Customer 04',
-    action: 'Property payment reminder',
-    result: 'Follow-up requested',
-    next: 'Call again tomorrow',
-    type: 'follow',
-    initials: 'EC',
-  },
-  {
-    time: '9:34 AM',
-    name: 'Example Customer 05',
-    action: 'Account notification',
-    result: 'Customer acknowledged',
-    next: 'No action required',
-    type: 'resolved',
-    initials: 'EC',
-  },
-];
+type Activity = {
+  id: string;
+  customer_id: string;
+  call_id?: string;
+  activity_type: string;
+  title: string;
+  description: string;
+  metadata: Record<string, any>;
+  created_at: string;
+  customer_name?: string;
+};
 
 const filters = ['All activity', 'Calls', 'Follow-ups', 'Attention', 'Resolved'];
 
+const getInitials = (name: string) => {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+};
+
+const formatTime = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffHours < 1) return 'Now';
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+const getActivityType = (metadata: Record<string, any>) => {
+  const outcome = metadata?.outcome || 'unknown';
+  if (outcome === 'escalation_needed' || metadata?.escalation_required) return 'attention';
+  if (metadata?.follow_up_required) return 'follow';
+  if (outcome === 'resolved') return 'resolved';
+  return 'follow';
+};
+
 export default function ActivityScreen() {
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(true);
   const { width } = useWindowDimensions();
   const isWide = width >= 1000;
+
+  useEffect(() => {
+    fetchActivities();
+  }, []);
+
+  const fetchActivities = async () => {
+    try {
+      await ensureSession();
+
+      const { data, error } = await supabase
+        .from('activities')
+        .select('id, customer_id, call_id, activity_type, title, description, metadata, created_at')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      // Fetch customer names for each activity
+      const activitiesWithNames = await Promise.all(
+        (data || []).map(async (activity) => {
+          if (!activity.customer_id) return activity;
+
+          const { data: customer } = await supabase
+            .from('customers')
+            .select('name')
+            .eq('id', activity.customer_id)
+            .single();
+
+          return {
+            ...activity,
+            customer_name: customer?.name || 'Unknown Customer',
+          };
+        })
+      );
+
+      setActivities(activitiesWithNames);
+    } catch (err) {
+      console.error('Failed to fetch activities:', err);
+      setActivities([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const nav = [
     ['⌂', 'Overview', '/'],
@@ -97,7 +140,7 @@ export default function ActivityScreen() {
               </View>
 
               <View style={styles.workspaceText}>
-                <Text style={styles.companyName}>Example Organization</Text>
+                <Text style={styles.companyName}>Lekki Gardens</Text>
                 <Text style={styles.companyRole}>Customer Care</Text>
               </View>
 
@@ -239,76 +282,93 @@ export default function ActivityScreen() {
                 <Text style={styles.tableHeading}>TIME</Text>
               </View>
 
-              {events.map((event, index) => (
-                <Pressable
-                  key={event.name + event.time}
-                  onPress={() => router.push('/customers' as any)}
-                  style={({ pressed }) => [
-                    styles.event,
-                    index === events.length - 1 && styles.eventLast,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <View style={styles.customerColumn}>
-                    <View style={styles.customerCell}>
-                      <View style={styles.personAvatar}>
-                        <Text style={styles.personAvatarText}>{event.initials}</Text>
-                      </View>
+              {loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#0066cc" />
+                </View>
+              ) : activities.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>No activities yet. Start making calls to see activity records here.</Text>
+                </View>
+              ) : (
+                activities.map((activity, index) => {
+                  const activityType = getActivityType(activity.metadata);
+                  const customerInitials = activity.customer_name ? getInitials(activity.customer_name) : 'XX';
+                  const outcome = activity.metadata?.outcome || 'unknown';
+                  const nextAction = activity.metadata?.next_action || 'Pending review';
 
-                      <View style={styles.customerInfo}>
-                        <Text style={styles.name}>{event.name}</Text>
-                        <Text style={styles.customerType}>Customer</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View style={styles.actionColumn}>
-                    <Text style={styles.action}>{event.action}</Text>
-                    <Text style={styles.agentLabel}>Handled by CALL-E</Text>
-                  </View>
-
-                  <View style={styles.outcomeColumn}>
-                    <View
-                      style={[
-                        styles.outcomeBadge,
-                        event.type === 'attention' && styles.outcomeAttention,
-                        event.type === 'resolved' && styles.outcomeResolved,
+                  return (
+                    <Pressable
+                      key={activity.id}
+                      onPress={() => router.push('/customers' as any)}
+                      style={({ pressed }) => [
+                        styles.event,
+                        index === activities.length - 1 && styles.eventLast,
+                        pressed && styles.pressed,
                       ]}
                     >
-                      <View
-                        style={[
-                          styles.outcomeDot,
-                          event.type === 'attention' && styles.outcomeDotAttention,
-                          event.type === 'resolved' && styles.outcomeDotResolved,
-                        ]}
-                      />
-                      <Text
-                        style={[
-                          styles.outcomeText,
-                          event.type === 'attention' && styles.outcomeTextAttention,
-                          event.type === 'resolved' && styles.outcomeTextResolved,
-                        ]}
-                      >
-                        {event.type === 'attention'
-                          ? 'Attention'
-                          : event.type === 'resolved'
-                          ? 'Resolved'
-                          : 'Follow-up'}
-                      </Text>
-                    </View>
-                    <Text style={styles.result}>{event.result}</Text>
-                  </View>
+                      <View style={styles.customerColumn}>
+                        <View style={styles.customerCell}>
+                          <View style={styles.personAvatar}>
+                            <Text style={styles.personAvatarText}>{customerInitials}</Text>
+                          </View>
 
-                  <View style={styles.nextColumn}>
-                    <Text style={styles.nextAction}>{event.next}</Text>
-                  </View>
+                          <View style={styles.customerInfo}>
+                            <Text style={styles.name}>{activity.customer_name || 'Unknown'}</Text>
+                            <Text style={styles.customerType}>Customer</Text>
+                          </View>
+                        </View>
+                      </View>
 
-                  <View style={styles.timeColumn}>
-                    <Text style={styles.time}>{event.time}</Text>
-                    <Text style={styles.arrow}>›</Text>
-                  </View>
-                </Pressable>
-              ))}
+                      <View style={styles.actionColumn}>
+                        <Text style={styles.action}>{activity.title || activity.activity_type}</Text>
+                        <Text style={styles.agentLabel}>Handled by SERVEXA</Text>
+                      </View>
+
+                      <View style={styles.outcomeColumn}>
+                        <View
+                          style={[
+                            styles.outcomeBadge,
+                            activityType === 'attention' && styles.outcomeAttention,
+                            activityType === 'resolved' && styles.outcomeResolved,
+                          ]}
+                        >
+                          <View
+                            style={[
+                              styles.outcomeDot,
+                              activityType === 'attention' && styles.outcomeDotAttention,
+                              activityType === 'resolved' && styles.outcomeDotResolved,
+                            ]}
+                          />
+                          <Text
+                            style={[
+                              styles.outcomeText,
+                              activityType === 'attention' && styles.outcomeTextAttention,
+                              activityType === 'resolved' && styles.outcomeTextResolved,
+                            ]}
+                          >
+                            {activityType === 'attention'
+                              ? 'Attention'
+                              : activityType === 'resolved'
+                              ? 'Resolved'
+                              : 'Follow-up'}
+                          </Text>
+                        </View>
+                        <Text style={styles.result}>{activity.description || outcome}</Text>
+                      </View>
+
+                      <View style={styles.nextColumn}>
+                        <Text style={styles.nextAction}>{nextAction}</Text>
+                      </View>
+
+                      <View style={styles.timeColumn}>
+                        <Text style={styles.time}>{formatTime(activity.created_at)}</Text>
+                        <Text style={styles.arrow}>›</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })
+              )}
             </View>
 
             <View style={styles.callInsight}>
@@ -663,4 +723,24 @@ const styles = StyleSheet.create({
   },
 
   customersButtonText: { color: '#147983', fontSize: 9, fontWeight: '900' },
+
+  loadingContainer: {
+    minHeight: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+
+  emptyContainer: {
+    minHeight: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+
+  emptyText: {
+    color: '#8B949D',
+    fontSize: 12,
+    textAlign: 'center',
+  },
 });
