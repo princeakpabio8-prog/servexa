@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     Alert,
     Modal,
@@ -13,7 +13,7 @@ import {
     View,
     useWindowDimensions
 } from 'react-native';
-import { supabase } from '../lib/supabase';
+import { ensureSession, supabase } from '../lib/supabase';
 
 type CustomerStatus = 'Active' | 'Follow-up' | 'Attention' | 'Resolved';
 
@@ -30,80 +30,14 @@ type Customer = {
   lastContact: string;
 };
 
-// Map of demo customer IDs to their database UUIDs
-const CUSTOMER_UUID_MAP: { [key: string]: string } = {
-  '2': '09dc4c81-855c-4881-b724-3ba7f5411e5c', // Jane Smith - validated UUID
+const getInitials = (name: string) => {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 };
-
-const seedCustomers: Customer[] = [
-  {
-    id: '1',
-    initials: 'SJ',
-    name: 'Sarah Johnson',
-    phone: '+234 803 245 1187',
-    reason: 'Property payment',
-    amount: '₦2,450,000',
-    nextAction: 'Today, 4:00 PM',
-    status: 'Attention',
-    lastContact: '12 min ago',
-  },
-  {
-    id: '2',
-    uuid: CUSTOMER_UUID_MAP['2'],
-    initials: 'MB',
-    name: 'Michael Brown',
-    phone: '+2348032451234',
-    reason: 'Loan repayment',
-    amount: '₦840,000',
-    nextAction: 'Tomorrow, 10:00 AM',
-    status: 'Follow-up',
-    lastContact: '18 min ago',
-  },
-  {
-    id: '3',
-    initials: 'AW',
-    name: 'Amaka Williams',
-    phone: '+234 814 927 4401',
-    reason: 'Document collection',
-    amount: '—',
-    nextAction: 'Today, 5:30 PM',
-    status: 'Attention',
-    lastContact: '34 min ago',
-  },
-  {
-    id: '4',
-    initials: 'DO',
-    name: 'Daniel Okafor',
-    phone: '+234 802 117 6308',
-    reason: 'Payment reminder',
-    amount: '₦390,000',
-    nextAction: 'Friday, 9:00 AM',
-    status: 'Follow-up',
-    lastContact: '1 hr ago',
-  },
-  {
-    id: '5',
-    initials: 'EA',
-    name: 'Esther Adeyemi',
-    phone: '+234 809 671 5203',
-    reason: 'Renewal reminder',
-    amount: '₦125,000',
-    nextAction: 'Completed',
-    status: 'Resolved',
-    lastContact: '2 hrs ago',
-  },
-  {
-    id: '6',
-    initials: 'KO',
-    name: 'Kunle Oladipo',
-    phone: '+234 810 453 8812',
-    reason: 'Customer follow-up',
-    amount: '—',
-    nextAction: 'Monday, 11:00 AM',
-    status: 'Active',
-    lastContact: '3 hrs ago',
-  },
-];
 
 const filters = ['All', 'Active', 'Follow-up', 'Attention', 'Resolved'];
 
@@ -119,20 +53,58 @@ export default function CustomersScreen() {
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
 
-  const [customers, setCustomers] = useState<Customer[]>(seedCustomers);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const [selected, setSelected] = useState<Customer | null>(null);
   const [followUpVisible, setFollowUpVisible] = useState(false);
   const [followUpTime, setFollowUpTime] = useState('');
   const [callLoading, setCallLoading] = useState(false);
-  const [manualPhone, setManualPhone] = useState('+2348032451234');
+  const [manualPhone, setManualPhone] = useState('');
   const [manualCallLoading, setManualCallLoading] = useState(false);
   const [addCustomerVisible, setAddCustomerVisible] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerPhone, setNewCustomerPhone] = useState('');
   const [newCustomerReason, setNewCustomerReason] = useState('');
   const [newCustomerAmount, setNewCustomerAmount] = useState('');
+
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
+
+  const fetchCustomers = async () => {
+    try {
+      await ensureSession();
+
+      const { data, error } = await supabase
+        .from('customers')
+        .select('id, name, phone')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      const formattedCustomers = (data || []).map((c: any) => ({
+        id: c.id,
+        uuid: c.id,
+        initials: getInitials(c.name),
+        name: c.name,
+        phone: c.phone,
+        reason: 'Call needed',
+        amount: '—',
+        nextAction: 'Pending',
+        status: 'Active' as CustomerStatus,
+        lastContact: 'Never',
+      }));
+
+      setCustomers(formattedCustomers);
+    } catch (err) {
+      console.error('Failed to fetch customers:', err);
+      Alert.alert('Error', 'Failed to load customers from database');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const normalizePhoneForCall = (raw: string) => {
     const cleaned = raw.replace(/\s+/g, '').replace(/[^\d+]/g, '');
@@ -158,7 +130,7 @@ export default function CustomersScreen() {
 
       return matchesFilter && matchesSearch;
     });
-  }, [filter, search]);
+  }, [customers, filter, search]);
 
   const goTo = (path: string) => {
     router.push(path as any);
@@ -172,7 +144,7 @@ export default function CustomersScreen() {
       .map((part) => part[0]?.toUpperCase() ?? '')
       .join('') || 'CU';
 
-  const addCustomer = () => {
+  const addCustomer = async () => {
     const cleanName = newCustomerName.trim();
     const cleanPhone = normalizePhoneForCall(newCustomerPhone);
     const cleanReason = newCustomerReason.trim() || 'Customer follow-up';
@@ -183,27 +155,48 @@ export default function CustomersScreen() {
       return;
     }
 
-    const newCustomer: Customer = {
-      id: `custom-${Date.now()}`,
-      initials: getInitials(cleanName),
-      name: cleanName,
-      phone: cleanPhone,
-      reason: cleanReason,
-      amount: cleanAmount,
-      nextAction: 'Today, 2:00 PM',
-      status: 'Follow-up',
-      lastContact: 'Just now',
-    };
+    try {
+      const session = await ensureSession();
+      if (!session) throw new Error('Unable to authenticate session');
 
-    setCustomers((current) => [newCustomer, ...current]);
-    setSelected(newCustomer);
-    setNewCustomerName('');
-    setNewCustomerPhone('');
-    setNewCustomerReason('');
-    setNewCustomerAmount('');
-    setAddCustomerVisible(false);
+      const { data, error } = await supabase
+        .from('customers')
+        .insert({
+          owner_id: session.user.id,
+          name: cleanName,
+          phone: cleanPhone,
+        })
+        .select('id, name, phone')
+        .single();
 
-    Alert.alert('Customer added', `${cleanName} was added and is ready for testing.`);
+      if (error) throw error;
+
+      const newCustomer: Customer = {
+        id: data.id,
+        uuid: data.id,
+        initials: getInitials(cleanName),
+        name: data.name,
+        phone: data.phone,
+        reason: cleanReason,
+        amount: cleanAmount,
+        nextAction: 'Today, 2:00 PM',
+        status: 'Follow-up',
+        lastContact: 'Just now',
+      };
+
+      setCustomers((current) => [newCustomer, ...current]);
+      setSelected(newCustomer);
+      setNewCustomerName('');
+      setNewCustomerPhone('');
+      setNewCustomerReason('');
+      setNewCustomerAmount('');
+      setAddCustomerVisible(false);
+
+      Alert.alert('Customer added', `${cleanName} was added and is ready for testing.`);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unable to add customer.';
+      Alert.alert('Add customer failed', errorMsg);
+    }
   };
 
   const callCustomer = async () => {
@@ -329,6 +322,94 @@ export default function CustomersScreen() {
     );
   };
 
+  const renderAddCustomerModal = () => (
+    <Modal
+      visible={addCustomerVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setAddCustomerVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalCard}>
+          <View style={styles.modalHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.modalTitle}>Add customer</Text>
+              <Text style={styles.modalSubtitle}>
+                Add a customer and test a live phone call immediately.
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={() => setAddCustomerVisible(false)}
+              style={styles.modalClose}
+            >
+              <Text style={styles.modalCloseText}>×</Text>
+            </Pressable>
+          </View>
+
+          <Text style={styles.modalLabel}>FULL NAME</Text>
+          <TextInput
+            value={newCustomerName}
+            onChangeText={setNewCustomerName}
+            placeholder="e.g. Ada Okafor"
+            placeholderTextColor="#A0A7AE"
+            style={styles.modalInput}
+          />
+
+          <Text style={styles.modalLabel}>PHONE NUMBER</Text>
+          <TextInput
+            value={newCustomerPhone}
+            onChangeText={setNewCustomerPhone}
+            placeholder="+2348032451234"
+            placeholderTextColor="#A0A7AE"
+            keyboardType="phone-pad"
+            style={styles.modalInput}
+          />
+
+          <Text style={styles.modalLabel}>REASON</Text>
+          <TextInput
+            value={newCustomerReason}
+            onChangeText={setNewCustomerReason}
+            placeholder="Customer follow-up"
+            placeholderTextColor="#A0A7AE"
+            style={styles.modalInput}
+          />
+
+          <Text style={styles.modalLabel}>AMOUNT</Text>
+          <TextInput
+            value={newCustomerAmount}
+            onChangeText={setNewCustomerAmount}
+            placeholder="₦250,000"
+            placeholderTextColor="#A0A7AE"
+            style={styles.modalInput}
+          />
+
+          <View style={styles.modalActions}>
+            <Pressable
+              onPress={() => setAddCustomerVisible(false)}
+              style={({ pressed }) => [
+                styles.modalCancel,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={addCustomer}
+              style={({ pressed }) => [
+                styles.modalSave,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.modalSaveText}>Add customer</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   if (selected) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -384,6 +465,21 @@ export default function CustomersScreen() {
               </Text>
               <Text style={styles.callButtonText}>
                 {callLoading ? 'Calling...' : 'Call customer'}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push('/call-instruction' as any)}
+              accessibilityRole="button"
+              accessibilityLabel="Create directed call"
+              style={({ pressed }) => [
+                styles.directedCallButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.directedCallButtonIcon}>✎</Text>
+              <Text style={styles.directedCallButtonText}>
+                Directed call
               </Text>
             </Pressable>
           </View>
@@ -502,91 +598,7 @@ export default function CustomersScreen() {
             ))}
           </View>
 
-          <Modal
-            visible={addCustomerVisible}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setAddCustomerVisible(false)}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalCard}>
-                <View style={styles.modalHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.modalTitle}>Add customer</Text>
-                    <Text style={styles.modalSubtitle}>
-                      Add a customer and test a live phone call immediately.
-                    </Text>
-                  </View>
-
-                  <Pressable
-                    onPress={() => setAddCustomerVisible(false)}
-                    style={styles.modalClose}
-                  >
-                    <Text style={styles.modalCloseText}>×</Text>
-                  </Pressable>
-                </View>
-
-                <Text style={styles.modalLabel}>FULL NAME</Text>
-                <TextInput
-                  value={newCustomerName}
-                  onChangeText={setNewCustomerName}
-                  placeholder="e.g. Ada Okafor"
-                  placeholderTextColor="#A0A7AE"
-                  style={styles.modalInput}
-                />
-
-                <Text style={styles.modalLabel}>PHONE NUMBER</Text>
-                <TextInput
-                  value={newCustomerPhone}
-                  onChangeText={setNewCustomerPhone}
-                  placeholder="+2348032451234"
-                  placeholderTextColor="#A0A7AE"
-                  keyboardType="phone-pad"
-                  style={styles.modalInput}
-                />
-
-                <Text style={styles.modalLabel}>REASON</Text>
-                <TextInput
-                  value={newCustomerReason}
-                  onChangeText={setNewCustomerReason}
-                  placeholder="Customer follow-up"
-                  placeholderTextColor="#A0A7AE"
-                  style={styles.modalInput}
-                />
-
-                <Text style={styles.modalLabel}>AMOUNT</Text>
-                <TextInput
-                  value={newCustomerAmount}
-                  onChangeText={setNewCustomerAmount}
-                  placeholder="₦250,000"
-                  placeholderTextColor="#A0A7AE"
-                  style={styles.modalInput}
-                />
-
-                <View style={styles.modalActions}>
-                  <Pressable
-                    onPress={() => setAddCustomerVisible(false)}
-                    style={({ pressed }) => [
-                      styles.modalCancel,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Text style={styles.modalCancelText}>Cancel</Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={addCustomer}
-                    style={({ pressed }) => [
-                      styles.modalSave,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Text style={styles.modalSaveText}>Add customer</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          </Modal>
+          {renderAddCustomerModal()}
 
           <Modal
             visible={followUpVisible}
@@ -917,7 +929,16 @@ export default function CustomersScreen() {
                 <Text style={{ width: 28 }} />
               </View>
 
-              {filteredCustomers.map((customer) => (
+              {loading ? (
+                <View style={styles.loadingContainer}>
+                  <Text style={styles.loadingText}>Loading customers...</Text>
+                </View>
+              ) : filteredCustomers.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>No customers found. Create one to get started.</Text>
+                </View>
+              ) : (
+                filteredCustomers.map((customer) => (
                 <Pressable
                   key={customer.id}
                   onPress={() => setSelected(customer)}
@@ -1005,23 +1026,14 @@ export default function CustomersScreen() {
 
                   <Text style={styles.rowArrow}>›</Text>
                 </Pressable>
-              ))}
-
-              {filteredCustomers.length === 0 && (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyIcon}>⌕</Text>
-                  <Text style={styles.emptyTitle}>
-                    No customers found
-                  </Text>
-                  <Text style={styles.emptyText}>
-                    Try another search or change the status filter.
-                  </Text>
-                </View>
+              ))
               )}
             </View>
           </ScrollView>
         </View>
       </View>
+
+      {renderAddCustomerModal()}
     </SafeAreaView>
   );
 }
@@ -1596,6 +1608,23 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  loadingText: {
+    color: '#9AA1A9',
+    fontSize: 12,
+  },
+
+  emptyContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   profilePage: {
     padding: 26,
     paddingBottom: 60,
@@ -1701,6 +1730,29 @@ const styles = StyleSheet.create({
 
   callButtonLoading: {
     opacity: 0.7,
+  },
+
+  directedCallButton: {
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 11,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+
+  directedCallButtonIcon: {
+    color: '#0066cc',
+    fontSize: 12,
+  },
+
+  directedCallButtonText: {
+    color: '#0066cc',
+    fontSize: 11,
+    fontWeight: '800',
   },
 
   profileGrid: {
