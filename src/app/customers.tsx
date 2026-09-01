@@ -1745,6 +1745,56 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+  testCard: {
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E7E9ED',
+    borderRadius: 17,
+    padding: 18,
+  },
+
+  testCardTitle: {
+    color: '#27313A',
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+
+  testCardSubtitle: {
+    color: '#8E969F',
+    fontSize: 12,
+    marginBottom: 16,
+    lineHeight: 16,
+  },
+
+  testInput: {
+    borderWidth: 1,
+    borderColor: '#DCE1E8',
+    borderRadius: 10,
+    backgroundColor: '#F6F7F9',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 13,
+    color: '#111827',
+    marginBottom: 14,
+  },
+
+  testButton: {
+    backgroundColor: '#137A82',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  testButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
   timelineCard: {
     marginTop: 12,
     backgroundColor: '#FFFFFF',
