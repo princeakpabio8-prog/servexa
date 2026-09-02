@@ -99,7 +99,7 @@ export default function SettingsScreen() {
               <View style={styles.track}><View style={styles.fill} /></View>
               <Text style={styles.manage}>Manage plan →</Text>
             </View>
-            <Text style={styles.version}>SERVEXA v0.1 • Enterprise Preview</Text>
+            <Text style={styles.version}>SERVEXA v0.1</Text>
           </View>
         </View>
 
