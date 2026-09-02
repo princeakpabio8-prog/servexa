@@ -349,7 +349,11 @@ export default function ActivityScreen() {
                   return (
                     <Pressable
                       key={activity.id}
-                      onPress={() => router.push('/customers' as any)}
+                      onPress={() =>
+                        activity.call_id
+                          ? router.push({ pathname: '/call-detail' as any, params: { callId: activity.call_id } })
+                          : router.push('/customers' as any)
+                      }
                       style={({ pressed }) => [
                         styles.event,
                         index === activities.length - 1 && styles.eventLast,
