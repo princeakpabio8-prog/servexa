@@ -2,6 +2,8 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
     Alert,
+    Animated,
+    Easing,
     Modal,
     Pressable,
     SafeAreaView,
@@ -79,6 +81,8 @@ export default function CustomersScreen() {
   const [followUpVisible, setFollowUpVisible] = useState(false);
   const [followUpTime, setFollowUpTime] = useState('');
   const [callLoading, setCallLoading] = useState(false);
+  const [callState, setCallState] = useState<'idle' | 'connecting' | 'queued'>('idle');
+  const callPulse = useState(() => new Animated.Value(0))[0];
   const [manualPhone, setManualPhone] = useState('');
   const [manualCallLoading, setManualCallLoading] = useState(false);
   const [addCustomerVisible, setAddCustomerVisible] = useState(false);
@@ -117,6 +121,34 @@ export default function CustomersScreen() {
 
     fetchCustomerActivities();
   }, [selected?.uuid]);
+
+  useEffect(() => {
+    if (!callLoading) {
+      callPulse.stopAnimation();
+      callPulse.setValue(0);
+      return;
+    }
+
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(callPulse, {
+          toValue: 1,
+          duration: 850,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(callPulse, {
+          toValue: 0,
+          duration: 850,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    pulse.start();
+    return () => pulse.stop();
+  }, [callLoading, callPulse]);
 
   const fetchCustomers = async () => {
     try {
@@ -275,6 +307,7 @@ export default function CustomersScreen() {
     }
 
     setCallLoading(true);
+    setCallState('connecting');
 
     try {
       const { data, error } = await supabase.functions.invoke(
@@ -301,6 +334,8 @@ export default function CustomersScreen() {
         'Call initiated',
         `AI call started with ${selected.name}. Call ID: ${data?.servexa_call_id?.slice(0, 8)}...`
       );
+      setCallState('queued');
+      setTimeout(() => setCallState('idle'), 2600);
     } catch (err) {
       const errorMsg =
         err instanceof Error
@@ -313,6 +348,7 @@ export default function CustomersScreen() {
       );
     } finally {
       setCallLoading(false);
+      setCallState((current) => current === 'connecting' ? 'idle' : current);
     }
   };
 
@@ -552,11 +588,21 @@ export default function CustomersScreen() {
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.callButtonIcon}>
-                {callLoading ? '⟳' : '◉'}
-              </Text>
+              <Animated.View
+                style={[
+                  styles.callPulse,
+                  callLoading && {
+                    opacity: callPulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] }),
+                    transform: [{ scale: callPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] }) }],
+                  },
+                ]}
+              >
+                <Text style={styles.callButtonIcon}>
+                  {callState === 'queued' ? '✓' : callLoading ? '◌' : '◉'}
+                </Text>
+              </Animated.View>
               <Text style={styles.callButtonText}>
-                {callLoading ? 'Calling...' : 'Call customer'}
+                {callState === 'queued' ? 'Call queued' : callLoading ? 'Connecting...' : 'Call customer'}
               </Text>
             </Pressable>
 
@@ -1809,6 +1855,13 @@ const styles = StyleSheet.create({
   callButtonIcon: {
     color: '#FFFFFF',
     fontSize: 12,
+  },
+
+  callPulse: {
+    width: 14,
+    height: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   callButtonText: {
