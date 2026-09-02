@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import {
+    Image,
     Pressable,
     SafeAreaView,
     ScrollView,
@@ -52,11 +53,12 @@ export default function SettingsScreen() {
         <View style={styles.sidebar}>
           <View>
             <Pressable style={styles.brandRow} onPress={() => router.push('/')}>
-              <View style={styles.brandMark}><Text style={styles.brandMarkText}>S</Text></View>
-              <View>
-                <Text style={styles.brand}>SERVEXA</Text>
-                <Text style={styles.brandSmall}>CUSTOMER OPERATIONS</Text>
-              </View>
+              <Image
+                source={require('../../assets/images/servexa-logo.png')}
+                style={styles.brandLogo}
+                resizeMode="contain"
+                accessibilityLabel="SERVEXA"
+              />
             </Pressable>
 
             <Text style={styles.workspaceLabel}>WORKSPACE</Text>
@@ -181,6 +183,7 @@ const styles = StyleSheet.create({
   app: { flex: 1, flexDirection: 'row' },
   sidebar: { width: 270, backgroundColor: '#FFF', borderRightWidth: 1, borderRightColor: '#E5E8EC', padding: 20, paddingTop: 28, paddingBottom: 20, justifyContent: 'space-between' },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  brandLogo: { width: 170, height: 38 },
   brandMark: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#122735', alignItems: 'center', justifyContent: 'center' },
   brandMarkText: { color: '#FFF', fontSize: 19, fontWeight: '900' },
   brand: { color: '#152532', fontSize: 17, fontWeight: '900', letterSpacing: 1 },

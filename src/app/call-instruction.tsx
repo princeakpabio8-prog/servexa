@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Image,
     Pressable,
     SafeAreaView,
     ScrollView,
@@ -227,13 +228,12 @@ export default function CallInstructionScreen() {
       <View style={styles.app}>
         <View style={styles.sidebar}>
           <Pressable style={styles.brandRow} onPress={() => router.push('/')}>
-            <View style={styles.brandMark}>
-              <Text style={styles.brandMarkText}>S</Text>
-            </View>
-            <View>
-              <Text style={styles.brand}>SERVEXA</Text>
-              <Text style={styles.brandSmall}>CUSTOMER OPERATIONS</Text>
-            </View>
+            <Image
+              source={require('../../assets/images/servexa-logo.png')}
+              style={styles.brandLogo}
+              resizeMode="contain"
+              accessibilityLabel="SERVEXA"
+            />
           </Pressable>
 
           <Text style={styles.workspaceLabel}>WORKSPACE</Text>
@@ -524,6 +524,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 32,
+  },
+  brandLogo: {
+    width: 170,
+    height: 38,
   },
   brandMark: {
     width: 40,

@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import {
     Alert,
+    Image,
     Pressable,
     SafeAreaView,
     ScrollView,
@@ -36,13 +37,12 @@ export default function CampaignsScreen() {
         <View style={styles.sidebar}>
           <View>
             <Pressable style={styles.brandRow} onPress={() => router.push('/')}>
-              <View style={styles.brandMark}>
-                <Text style={styles.brandMarkText}>S</Text>
-              </View>
-              <View>
-                <Text style={styles.brand}>SERVEXA</Text>
-                <Text style={styles.brandSmall}>CUSTOMER OPERATIONS</Text>
-              </View>
+              <Image
+                source={require('../../assets/images/servexa-logo.png')}
+                style={styles.brandLogo}
+                resizeMode="contain"
+                accessibilityLabel="SERVEXA"
+              />
             </Pressable>
 
             <Text style={styles.workspaceLabel}>WORKSPACE</Text>
@@ -297,6 +297,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20, justifyContent: 'space-between',
   },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  brandLogo: { width: 170, height: 38 },
   brandMark: {
     width: 38, height: 38, borderRadius: 12, backgroundColor: '#122735',
     alignItems: 'center', justifyContent: 'center',

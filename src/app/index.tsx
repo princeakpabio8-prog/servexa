@@ -1,6 +1,7 @@
 ﻿import { Link, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+    Image,
     Pressable,
     SafeAreaView,
     ScrollView,
@@ -104,13 +105,12 @@ export default function DashboardScreen() {
         <View style={styles.sidebar}>
           <View>
             <View style={styles.brandRow}>
-              <View style={styles.brandMark}>
-                <Text style={styles.brandMarkText}>S</Text>
-              </View>
-              <View>
-                <Text style={styles.brand}>SERVEXA</Text>
-                <Text style={styles.brandSub}>CUSTOMER OPERATIONS</Text>
-              </View>
+              <Image
+                source={require('../../assets/images/servexa-logo.png')}
+                style={styles.brandLogo}
+                resizeMode="contain"
+                accessibilityLabel="SERVEXA"
+              />
             </View>
 
             <Text style={styles.workspaceLabel}>WORKSPACE</Text>
@@ -534,6 +534,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 6,
+  },
+
+  brandLogo: {
+    width: 170,
+    height: 38,
   },
 
   brandMark: {
