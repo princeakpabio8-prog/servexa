@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import {
+    Alert,
     Pressable,
     SafeAreaView,
     ScrollView,
@@ -8,6 +9,9 @@ import {
     Text,
     View,
 } from 'react-native';
+
+const COMING_SOON_MESSAGE =
+  'Campaign automation is coming soon. For now, use Customers \u2192 Use a call template to run directed calls.';
 
 const campaigns = [
   {
@@ -132,7 +136,10 @@ export default function CampaignsScreen() {
                 </Text>
               </View>
 
-              <Pressable style={styles.createButton}>
+              <Pressable
+                style={styles.createButton}
+                onPress={() => Alert.alert('Coming soon', COMING_SOON_MESSAGE)}
+              >
                 <Text style={styles.createButtonText}>+ New campaign</Text>
               </Pressable>
             </View>
@@ -159,7 +166,7 @@ export default function CampaignsScreen() {
               <View style={{ flex: 1 }}>
                 <View style={styles.featuredBadge}>
                   <View style={styles.liveDot} />
-                  <Text style={styles.featuredBadgeText}>AUTOMATION READY</Text>
+                  <Text style={styles.featuredBadgeText}>COMING SOON</Text>
                 </View>
                 <Text style={styles.featuredTitle}>
                   Turn a customer list into an automated conversation.
@@ -167,7 +174,10 @@ export default function CampaignsScreen() {
                 <Text style={styles.featuredText}>
                   Choose a customer-care purpose, select your audience, define the rules, and let CALL-E handle the routine conversations.
                 </Text>
-                <Pressable style={styles.featuredButton}>
+                <Pressable
+                  style={styles.featuredButton}
+                  onPress={() => Alert.alert('Coming soon', COMING_SOON_MESSAGE)}
+                >
                   <Text style={styles.featuredButtonText}>Start a campaign →</Text>
                 </Pressable>
               </View>
@@ -208,7 +218,7 @@ export default function CampaignsScreen() {
             {campaigns.map((campaign) => (
               <Pressable
                 key={campaign.name}
-                onPress={() => {}}
+                onPress={() => Alert.alert('Coming soon', COMING_SOON_MESSAGE)}
                 style={({ pressed }) => [
                   styles.campaignCard,
                   pressed && styles.cardPressed,
