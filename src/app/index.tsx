@@ -187,7 +187,7 @@ export default function DashboardScreen() {
               </Pressable>
             </View>
 
-            <Text style={styles.version}>SERVEXA v0.1 • Demo</Text>
+            <Text style={styles.version}>SERVEXA v0.1</Text>
           </View>
         </View>
 
@@ -362,7 +362,7 @@ export default function DashboardScreen() {
                   </View>
 
                   <View style={styles.countBadge}>
-                    <Text style={styles.countBadgeText}>8</Text>
+                    <Text style={styles.countBadgeText}>{attention.length}</Text>
                   </View>
                 </View>
 
