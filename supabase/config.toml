@@ -416,3 +416,6 @@ verify_jwt = false
 
 [functions.calle-webhook]
 verify_jwt = false
+
+[functions.sync-call-status]
+verify_jwt = false
