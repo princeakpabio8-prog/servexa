@@ -1,4 +1,5 @@
 ﻿import { Link, router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
     Pressable,
     SafeAreaView,
@@ -9,29 +10,90 @@ import {
     View,
     useWindowDimensions,
 } from 'react-native';
+import { ensureSession, supabase } from '../lib/supabase';
 
-const stats = [
-  { label: 'Calls handled today', value: '184', change: '+12%', tone: 'good' },
-  { label: 'Successfully resolved', value: '157', change: '85%', tone: 'good' },
-  { label: 'Follow-ups queued', value: '19', change: 'Today', tone: 'neutral' },
-  { label: 'Human attention', value: '8', change: 'Needs action', tone: 'alert' },
-];
+type DashboardStat = { label: string; value: string; change: string; tone: string };
+type AttentionItem = { name: string; reason: string; priority: string };
+type ActivityItem = { name: string; detail: string; result: string; time: string; type: string };
 
-const attention = [
-  { name: 'Example Customer 01', reason: 'Payment issue reported', priority: 'High' },
-  { name: 'Example Customer 02', reason: 'Amount disputed', priority: 'High' },
-  { name: 'Example Customer 03', reason: 'Requested a human agent', priority: 'Medium' },
-];
-
-const activity = [
-  { name: 'Example Customer 01', detail: 'Payment reminder', result: 'Promise to pay', time: '2 min ago', type: 'follow' },
-  { name: 'Example Customer 02', detail: 'Sample repayment', result: 'Resolved', time: '18 min ago', type: 'resolved' },
-  { name: 'Example Customer 03', detail: 'Document collection', result: 'Human attention', time: '34 min ago', type: 'attention' },
-];
+const formatRelativeTime = (value: string) => {
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000));
+  if (minutes < 1) return 'Now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+};
 
 export default function DashboardScreen() {
   const { width } = useWindowDimensions();
   const isWide = width >= 1050;
+  const [stats, setStats] = useState<DashboardStat[]>([]);
+  const [attention, setAttention] = useState<AttentionItem[]>([]);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadDashboard = async () => {
+      try {
+        await ensureSession();
+
+        const [{ data: calls }, { data: followUps }, { data: activities }] = await Promise.all([
+          supabase.from('calls').select('id, status, created_at').order('created_at', { ascending: false }),
+          supabase.from('follow_ups').select('id, status').eq('status', 'pending'),
+          supabase
+            .from('activities')
+            .select('id, customer_id, title, description, metadata, created_at')
+            .order('created_at', { ascending: false })
+            .limit(20),
+        ]);
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayCalls = (calls ?? []).filter((call) => new Date(call.created_at) >= today);
+        const resolvedToday = (activities ?? []).filter(
+          (item) => new Date(item.created_at) >= today && item.metadata?.outcome === 'resolved'
+        ).length;
+        const attentionItems = (activities ?? []).filter((item) => item.metadata?.escalation_required);
+
+        const customerIds = Array.from(new Set((activities ?? []).map((item) => item.customer_id).filter(Boolean)));
+        const { data: customers } = customerIds.length
+          ? await supabase.from('customers').select('id, name').in('id', customerIds)
+          : { data: [] };
+        const customerNames = new Map((customers ?? []).map((customer) => [customer.id, customer.name]));
+
+        setStats([
+          { label: 'Calls today', value: String(todayCalls.length), change: 'Live', tone: 'good' },
+          { label: 'Resolved today', value: String(resolvedToday), change: todayCalls.length ? `${Math.round((resolvedToday / todayCalls.length) * 100)}%` : '—', tone: 'good' },
+          { label: 'Follow-ups queued', value: String(followUps?.length ?? 0), change: 'Pending', tone: 'neutral' },
+          { label: 'Human attention', value: String(attentionItems.length), change: 'Needs action', tone: 'alert' },
+        ]);
+
+        setAttention(
+          attentionItems.slice(0, 3).map((item) => ({
+            name: customerNames.get(item.customer_id) ?? 'Unknown customer',
+            reason: item.metadata?.escalation_reason ?? item.description ?? 'Review required',
+            priority: 'Review',
+          }))
+        );
+        setActivity(
+          (activities ?? []).slice(0, 3).map((item) => ({
+            name: customerNames.get(item.customer_id) ?? 'Unknown customer',
+            detail: item.title,
+            result: item.metadata?.outcome ?? 'Recorded',
+            time: formatRelativeTime(item.created_at),
+            type: item.metadata?.escalation_required ? 'attention' : item.metadata?.outcome === 'resolved' ? 'resolved' : 'follow',
+          }))
+        );
+      } catch (error) {
+        console.error('Failed to load dashboard:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboard();
+  }, []);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -114,7 +176,7 @@ export default function DashboardScreen() {
                 <View style={styles.planDot} />
               </View>
 
-              <Text style={styles.planText}>7,420 / 10,000 calls</Text>
+              <Text style={styles.planText}>Usage is available in Settings</Text>
 
               <View style={styles.progressTrack}>
                 <View style={styles.progressFill} />
@@ -141,7 +203,7 @@ export default function DashboardScreen() {
             {/* HEADER */}
             <View style={styles.header}>
               <View style={styles.headerCopy}>
-                <Text style={styles.eyebrow}>THURSDAY, AUGUST 28</Text>
+                <Text style={styles.eyebrow}>CUSTOMER OPERATIONS</Text>
                 <Text style={styles.heading}>Good morning.</Text>
                 <Text style={styles.subheading}>
                   Your customer-care operation is running.
@@ -234,7 +296,9 @@ export default function DashboardScreen() {
 
             {/* KPI CARDS */}
             <View style={styles.statsGrid}>
-              {stats.map((stat) => (
+              {loading ? (
+                <Text style={styles.loadingText}>Loading live performance...</Text>
+              ) : stats.map((stat) => (
                 <View style={styles.statCard} key={stat.label}>
                   <View style={styles.statCardTop}>
                     <Text style={styles.statLabel}>{stat.label}</Text>
@@ -302,7 +366,11 @@ export default function DashboardScreen() {
                   </View>
                 </View>
 
-                {attention.map((item) => (
+                {loading ? (
+                  <Text style={styles.emptyText}>Loading escalations...</Text>
+                ) : attention.length === 0 ? (
+                  <Text style={styles.emptyText}>No escalations recorded.</Text>
+                ) : attention.map((item) => (
                   <Pressable
                     style={styles.attentionRow}
                     key={item.name}
@@ -350,7 +418,11 @@ export default function DashboardScreen() {
                   </View>
                 </View>
 
-                {activity.map((item) => (
+                {loading ? (
+                  <Text style={styles.emptyText}>Loading activity...</Text>
+                ) : activity.length === 0 ? (
+                  <Text style={styles.emptyText}>No activity recorded yet.</Text>
+                ) : activity.map((item) => (
                   <Pressable
                     style={styles.activityRow}
                     key={item.name}
@@ -410,9 +482,9 @@ export default function DashboardScreen() {
 
               <Pressable
                 style={styles.automationButton}
-                onPress={() => router.push('/campaigns' as any)}
+                onPress={() => router.push('/customers' as any)}
               >
-                <Text style={styles.automationButtonText}>Manage automation</Text>
+                <Text style={styles.automationButtonText}>Open customers</Text>
               </Pressable>
             </View>
           </ScrollView>
@@ -443,6 +515,18 @@ const styles = StyleSheet.create({
     paddingTop: 28,
     paddingBottom: 20,
     justifyContent: 'space-between',
+  },
+
+  loadingText: {
+    color: '#77828C',
+    fontSize: 11,
+    paddingVertical: 20,
+  },
+
+  emptyText: {
+    color: '#77828C',
+    fontSize: 11,
+    paddingVertical: 18,
   },
 
   brandRow: {

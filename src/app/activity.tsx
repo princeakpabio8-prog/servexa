@@ -214,7 +214,7 @@ export default function ActivityScreen() {
                 <View style={styles.planDot} />
               </View>
 
-              <Text style={styles.planText}>7,420 of 10,000 calls</Text>
+              <Text style={styles.planText}>Usage is available in Settings</Text>
 
               <View style={styles.track}>
                 <View style={styles.fill} />
@@ -261,27 +261,33 @@ export default function ActivityScreen() {
 
             <View style={styles.summaryCard}>
               <View style={styles.summaryMain}>
-                <Text style={styles.summaryEyebrow}>TODAY'S AUTOMATED ACTIVITY</Text>
-                <Text style={styles.summaryValue}>1,071</Text>
+                <Text style={styles.summaryEyebrow}>RECENT AUTOMATED ACTIVITY</Text>
+                <Text style={styles.summaryValue}>{activities.length}</Text>
                 <Text style={styles.summaryDescription}>
-                  customer conversations processed by SERVEXA
+                  customer interactions loaded
                 </Text>
               </View>
 
               <View style={styles.summaryDivider} />
 
               <View style={styles.summaryStat}>
-                <Text style={styles.summaryStatValue}>85.3%</Text>
+                <Text style={styles.summaryStatValue}>
+                  {activities.length ? `${Math.round((activities.filter((item) => item.metadata?.outcome === 'resolved').length / activities.length) * 100)}%` : '—'}
+                </Text>
                 <Text style={styles.summaryStatLabel}>Resolved automatically</Text>
               </View>
 
               <View style={styles.summaryStat}>
-                <Text style={styles.summaryStatValue}>8</Text>
+                <Text style={styles.summaryStatValue}>
+                  {activities.filter((item) => item.metadata?.escalation_required).length}
+                </Text>
                 <Text style={styles.summaryStatLabel}>Need human attention</Text>
               </View>
 
               <View style={styles.summaryStat}>
-                <Text style={styles.summaryStatValue}>34</Text>
+                <Text style={styles.summaryStatValue}>
+                  {activities.filter((item) => item.metadata?.follow_up_required).length}
+                </Text>
                 <Text style={styles.summaryStatLabel}>Follow-ups created</Text>
               </View>
             </View>

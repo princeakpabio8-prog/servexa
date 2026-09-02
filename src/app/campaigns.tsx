@@ -13,41 +13,19 @@ import {
 const COMING_SOON_MESSAGE =
   'Campaign automation is coming soon. For now, use Customers \u2192 Use a call template to run directed calls.';
 
-const campaigns = [
-  {
-    name: 'Payment reminders',
-    purpose: 'Payment reminder',
-    description: 'Remind customers about upcoming payments and confirm when they plan to pay.',
-    status: 'Running',
-    audience: '1,248 customers',
-    progress: 78,
-    calls: '642',
-    followUps: '34',
-    attention: '8',
-  },
-  {
-    name: 'Outstanding payments',
-    purpose: 'Payment & collections',
-    description: 'Reach customers with overdue balances and capture their payment response.',
-    status: 'Running',
-    audience: '486 customers',
-    progress: 61,
-    calls: '291',
-    followUps: '21',
-    attention: '11',
-  },
-  {
-    name: 'Customer follow-up',
-    purpose: 'Follow-up',
-    description: 'Reconnect with customers who need another conversation or confirmation.',
-    status: 'Paused',
-    audience: '324 customers',
-    progress: 42,
-    calls: '138',
-    followUps: '13',
-    attention: '5',
-  },
-];
+type Campaign = {
+  name: string;
+  purpose: string;
+  description: string;
+  status: string;
+  audience: string;
+  progress: number;
+  calls: string;
+  followUps: string;
+  attention: string;
+};
+
+const campaigns: Campaign[] = [];
 
 export default function CampaignsScreen() {
   return (
@@ -115,7 +93,7 @@ export default function CampaignsScreen() {
             <View style={styles.planCard}>
               <Text style={styles.planEyebrow}>CURRENT PLAN</Text>
               <Text style={styles.planTitle}>Growth</Text>
-              <Text style={styles.planText}>7,420 of 10,000 calls</Text>
+              <Text style={styles.planText}>Usage is available in Settings</Text>
               <View style={styles.progressTrack}>
                 <View style={styles.progressFill} />
               </View>
@@ -147,17 +125,17 @@ export default function CampaignsScreen() {
             <View style={styles.summaryGrid}>
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryLabel}>ACTIVE CAMPAIGNS</Text>
-                <Text style={styles.summaryValue}>2</Text>
-                <Text style={styles.summaryHint}>Currently running</Text>
+                <Text style={styles.summaryValue}>0</Text>
+                  <Text style={styles.summaryHint}>No campaigns connected</Text>
               </View>
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryLabel}>CUSTOMERS REACHED</Text>
-                <Text style={styles.summaryValue}>2,058</Text>
+                <Text style={styles.summaryValue}>—</Text>
                 <Text style={styles.summaryHint}>Across all campaigns</Text>
               </View>
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryLabel}>CONVERSATIONS</Text>
-                <Text style={styles.summaryValue}>1,071</Text>
+                <Text style={styles.summaryValue}>—</Text>
                 <Text style={styles.summaryHint}>Automated this period</Text>
               </View>
             </View>
@@ -212,8 +190,15 @@ export default function CampaignsScreen() {
                 <Text style={styles.sectionTitle}>Your campaigns</Text>
                 <Text style={styles.sectionSubtitle}>Automated customer-care workflows</Text>
               </View>
-              <Text style={styles.total}>3 campaigns</Text>
+              <Text style={styles.total}>0 campaigns</Text>
             </View>
+
+              <View style={styles.emptyCampaigns}>
+                <Text style={styles.emptyCampaignsTitle}>Campaign automation is not connected yet.</Text>
+                <Text style={styles.emptyCampaignsText}>
+                  Use Customers to choose a call template and start a directed call.
+                </Text>
+              </View>
 
             {campaigns.map((campaign) => (
               <Pressable
@@ -397,6 +382,16 @@ const styles = StyleSheet.create({
   progressPercentage: { color: '#147983', fontSize: 7, fontWeight: '900' },
   campaignTrack: { height: 5, backgroundColor: '#E9EDF0', borderRadius: 10, overflow: 'hidden', marginTop: 5 },
   campaignFill: { height: '100%', backgroundColor: '#147983', borderRadius: 10 },
+  emptyCampaigns: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E8EC',
+    borderRadius: 17,
+    padding: 20,
+    marginBottom: 10,
+  },
+  emptyCampaignsTitle: { color: '#26343D', fontSize: 12, fontWeight: '900' },
+  emptyCampaignsText: { color: '#8C969F', fontSize: 10, lineHeight: 15, marginTop: 5 },
   purposeSection: {
     marginTop: 24,
     backgroundColor: '#FFFFFF',

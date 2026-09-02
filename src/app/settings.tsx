@@ -95,7 +95,7 @@ export default function SettingsScreen() {
             <View style={styles.planCard}>
               <Text style={styles.planEyebrow}>CURRENT PLAN</Text>
               <Text style={styles.planTitle}>Growth</Text>
-              <Text style={styles.planText}>7,420 of 10,000 calls</Text>
+              <Text style={styles.planText}>Usage data will appear here when billing is connected.</Text>
               <View style={styles.track}><View style={styles.fill} /></View>
               <Text style={styles.manage}>Manage plan →</Text>
             </View>
@@ -163,7 +163,7 @@ export default function SettingsScreen() {
               <View>
                 <Text style={styles.planBannerEyebrow}>CURRENT PLAN</Text>
                 <Text style={styles.planBannerTitle}>Growth</Text>
-                <Text style={styles.planBannerText}>7,420 of 10,000 monthly calls used</Text>
+                <Text style={styles.planBannerText}>Monthly usage is not connected yet</Text>
               </View>
               <Pressable style={styles.manageButton}>
                 <Text style={styles.manageButtonText}>Manage plan</Text>

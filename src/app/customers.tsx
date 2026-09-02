@@ -89,7 +89,7 @@ export default function CustomersScreen() {
 
       const { data, error } = await supabase
         .from('customers')
-        .select('id, name, phone')
+        .select('id, name, phone, status, created_at')
         .order('name', { ascending: true });
 
       if (error) throw error;
@@ -100,11 +100,11 @@ export default function CustomersScreen() {
         initials: getInitials(c.name),
         name: c.name,
         phone: c.phone,
-        reason: 'Call needed',
+        reason: 'No case note',
         amount: '—',
-        nextAction: 'Pending',
-        status: 'Active' as CustomerStatus,
-        lastContact: 'Never',
+        nextAction: 'No action scheduled',
+        status: c.status === 'blocked' ? 'Attention' : c.status === 'inactive' ? 'Resolved' : 'Active' as CustomerStatus,
+        lastContact: 'No recorded call',
       }));
 
       setCustomers(formattedCustomers);
@@ -840,7 +840,7 @@ export default function CustomersScreen() {
               <Text style={styles.planEyebrow}>CURRENT PLAN</Text>
               <Text style={styles.planTitle}>Growth</Text>
               <Text style={styles.planText}>
-                7,420 / 10,000 calls
+                Usage is available in Settings
               </Text>
 
               <View style={styles.progressTrack}>
@@ -853,7 +853,7 @@ export default function CustomersScreen() {
             </View>
 
             <Text style={styles.version}>
-              SERVEXA v0.1 • Demo
+              SERVEXA v0.1
             </Text>
           </View>
         </View>
