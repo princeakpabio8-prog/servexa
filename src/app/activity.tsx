@@ -61,6 +61,7 @@ const getActivityType = (metadata: Record<string, any>) => {
 export default function ActivityScreen() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const { width } = useWindowDimensions();
   const isWide = width >= 1000;
 
@@ -104,6 +105,36 @@ export default function ActivityScreen() {
       setActivities([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Manually pull the latest status for calls still awaiting a webhook.
+  // Falls back gracefully if CALL-E hasn't reached a terminal state yet.
+  const syncPendingCalls = async () => {
+    setSyncing(true);
+
+    try {
+      await ensureSession();
+
+      const { data: pendingCalls, error } = await supabase
+        .from('calls')
+        .select('id')
+        .in('status', ['initiated', 'queued', 'ringing', 'in_progress'])
+        .not('provider_call_id', 'is', null);
+
+      if (error) throw error;
+
+      await Promise.all(
+        (pendingCalls || []).map((call) =>
+          supabase.functions.invoke('sync-call-status', { body: { call_id: call.id } })
+        )
+      );
+
+      await fetchActivities();
+    } catch (err) {
+      console.error('Failed to sync pending calls:', err);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -210,9 +241,21 @@ export default function ActivityScreen() {
                 </Text>
               </View>
 
-              <View style={styles.livePill}>
-                <View style={styles.liveDot} />
-                <Text style={styles.liveText}>CALL-E LIVE</Text>
+              <View style={styles.headerActions}>
+                <Pressable
+                  onPress={syncPendingCalls}
+                  disabled={syncing}
+                  style={({ pressed }) => [styles.refreshButton, pressed && styles.pressed]}
+                >
+                  <Text style={styles.refreshButtonText}>
+                    {syncing ? 'Refreshing…' : '↻ Refresh status'}
+                  </Text>
+                </Pressable>
+
+                <View style={styles.livePill}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveText}>CALL-E LIVE</Text>
+                </View>
               </View>
             </View>
 
@@ -531,6 +574,19 @@ const styles = StyleSheet.create({
   eyebrow: { color: '#99A2AA', fontSize: 9, fontWeight: '900', letterSpacing: 1.3 },
   title: { color: '#15232E', fontSize: 32, fontWeight: '900', marginTop: 5 },
   subtitle: { color: '#77828C', fontSize: 12, marginTop: 6, maxWidth: 720 },
+
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+
+  refreshButton: {
+    borderWidth: 1,
+    borderColor: '#DCE1E5',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+  },
+
+  refreshButtonText: { color: '#35414A', fontSize: 10, fontWeight: '800' },
 
   livePill: {
     flexDirection: 'row',
