@@ -40,6 +40,16 @@ const getInitials = (name: string) => {
 };
 const filters = ['All', 'Active', 'Follow-up', 'Attention', 'Resolved'];
 
+// Kept in sync with the template ids/names defined in call-instruction.tsx
+const QUICK_TEMPLATES = [
+  { id: 'loan_recovery', name: 'Loan Recovery' },
+  { id: 'payment_reminder', name: 'Payment Reminder' },
+  { id: 'payment_confirmation', name: 'Payment Confirmation' },
+  { id: 'customer_followup', name: 'Customer Follow-up' },
+  { id: 'repayment_assistance', name: 'Repayment Assistance' },
+  { id: 'account_inquiry', name: 'Account Inquiry' },
+];
+
 const nav = [
   ['⌂', 'Overview', '/'],
   ['◎', 'Customers', '/customers'],
@@ -67,6 +77,7 @@ export default function CustomersScreen() {
   const [newCustomerPhone, setNewCustomerPhone] = useState('');
   const [newCustomerReason, setNewCustomerReason] = useState('');
   const [newCustomerAmount, setNewCustomerAmount] = useState('');
+  const [newCustomerTemplate, setNewCustomerTemplate] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCustomers();
@@ -185,13 +196,29 @@ export default function CustomersScreen() {
 
       setCustomers((current) => [newCustomer, ...current]);
       setSelected(newCustomer);
+
+      const chosenTemplate = newCustomerTemplate;
+
       setNewCustomerName('');
       setNewCustomerPhone('');
       setNewCustomerReason('');
       setNewCustomerAmount('');
+      setNewCustomerTemplate(null);
       setAddCustomerVisible(false);
 
-      Alert.alert('Customer added', `${cleanName} was added and is ready for testing.`);
+      if (chosenTemplate) {
+        router.push({
+          pathname: '/call-instruction' as any,
+          params: {
+            customerId: newCustomer.uuid,
+            customerName: newCustomer.name,
+            customerPhone: newCustomer.phone,
+            templateId: chosenTemplate,
+          },
+        });
+      } else {
+        Alert.alert('Customer added', `${cleanName} was added and is ready for testing.`);
+      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unable to add customer.';
       Alert.alert('Add customer failed', errorMsg);
@@ -383,6 +410,37 @@ export default function CustomersScreen() {
             style={styles.modalInput}
           />
 
+          <Text style={styles.modalLabel}>CALL TEMPLATE (OPTIONAL)</Text>
+          <Text style={styles.modalHint}>
+            Pick a template to jump straight into a directed call after saving.
+          </Text>
+          <View style={styles.templatePickerRow}>
+            {QUICK_TEMPLATES.map((template) => {
+              const active = newCustomerTemplate === template.id;
+              return (
+                <Pressable
+                  key={template.id}
+                  onPress={() =>
+                    setNewCustomerTemplate(active ? null : template.id)
+                  }
+                  style={[
+                    styles.templatePill,
+                    active && styles.templatePillActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.templatePillText,
+                      active && styles.templatePillTextActive,
+                    ]}
+                  >
+                    {template.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <View style={styles.modalActions}>
             <Pressable
               onPress={() => setAddCustomerVisible(false)}
@@ -468,7 +526,16 @@ export default function CustomersScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => router.push('/call-instruction' as any)}
+              onPress={() =>
+                router.push({
+                  pathname: '/call-instruction' as any,
+                  params: {
+                    customerId: selected.uuid ?? '',
+                    customerName: selected.name,
+                    customerPhone: selected.phone,
+                  },
+                })
+              }
               accessibilityRole="button"
               accessibilityLabel="Create directed call"
               style={({ pressed }) => [
@@ -478,7 +545,7 @@ export default function CustomersScreen() {
             >
               <Text style={styles.directedCallButtonIcon}>✎</Text>
               <Text style={styles.directedCallButtonText}>
-                Directed call
+                Use a call template
               </Text>
             </Pressable>
           </View>
@@ -499,37 +566,39 @@ export default function CustomersScreen() {
             </View>
           </View>
 
-          <View style={styles.testCard}>
-            <Text style={styles.testCardTitle}>Manual test call</Text>
-            <Text style={styles.testCardSubtitle}>
-              Enter a phone number to validate the live call connection.
-            </Text>
-
-            <TextInput
-              value={manualPhone}
-              onChangeText={setManualPhone}
-              placeholder="+12025550100"
-              placeholderTextColor="#A0A7AE"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="phone-pad"
-              style={styles.testInput}
-            />
-
-            <Pressable
-              onPress={testManualCall}
-              disabled={manualCallLoading}
-              style={({ pressed }) => [
-                styles.testButton,
-                manualCallLoading && styles.callButtonLoading,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.testButtonText}>
-                {manualCallLoading ? 'Testing...' : 'Test call now'}
+          {__DEV__ && (
+            <View style={styles.testCard}>
+              <Text style={styles.testCardTitle}>Manual test call</Text>
+              <Text style={styles.testCardSubtitle}>
+                Enter a phone number to validate the live call connection.
               </Text>
-            </Pressable>
-          </View>
+
+              <TextInput
+                value={manualPhone}
+                onChangeText={setManualPhone}
+                placeholder="+12025550100"
+                placeholderTextColor="#A0A7AE"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="phone-pad"
+                style={styles.testInput}
+              />
+
+              <Pressable
+                onPress={testManualCall}
+                disabled={manualCallLoading}
+                style={({ pressed }) => [
+                  styles.testButton,
+                  manualCallLoading && styles.callButtonLoading,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.testButtonText}>
+                  {manualCallLoading ? 'Testing...' : 'Test call now'}
+                </Text>
+              </Pressable>
+            </View>
+          )}
 
           <View style={styles.timelineCard}>
             <View style={styles.timelineHeader}>
@@ -871,33 +940,35 @@ export default function CustomersScreen() {
               </Text>
             </View>
 
-            <View style={styles.testPanel}>
-            <Text style={styles.testPanelTitle}>Live test call</Text>
-            <Text style={styles.testPanelSubtitle}>Use a direct phone number to trigger the edge function immediately.</Text>
-            <View style={styles.testPanelRow}>
-              <TextInput
-                value={manualPhone}
-                onChangeText={setManualPhone}
-                placeholder="+12025550100"
-                placeholderTextColor="#A0A7AE"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="phone-pad"
-                style={styles.testPanelInput}
-              />
-              <Pressable
-                onPress={testManualCall}
-                disabled={manualCallLoading}
-                style={({ pressed }) => [
-                  styles.testPanelButton,
-                  manualCallLoading && styles.callButtonLoading,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.testPanelButtonText}>{manualCallLoading ? 'Testing...' : 'Test'}</Text>
-              </Pressable>
+            {__DEV__ && (
+              <View style={styles.testPanel}>
+              <Text style={styles.testPanelTitle}>Live test call</Text>
+              <Text style={styles.testPanelSubtitle}>Use a direct phone number to trigger the edge function immediately.</Text>
+              <View style={styles.testPanelRow}>
+                <TextInput
+                  value={manualPhone}
+                  onChangeText={setManualPhone}
+                  placeholder="+12025550100"
+                  placeholderTextColor="#A0A7AE"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="phone-pad"
+                  style={styles.testPanelInput}
+                />
+                <Pressable
+                  onPress={testManualCall}
+                  disabled={manualCallLoading}
+                  style={({ pressed }) => [
+                    styles.testPanelButton,
+                    manualCallLoading && styles.callButtonLoading,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.testPanelButtonText}>{manualCallLoading ? 'Testing...' : 'Test'}</Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
+            )}
 
           <View style={styles.table}>
               <View style={styles.tableHeader}>
@@ -2009,6 +2080,44 @@ const styles = StyleSheet.create({
     color: '#27313A',
     fontSize: 11,
     backgroundColor: '#FAFAFB',
+  },
+
+  modalHint: {
+    color: '#A7AEB5',
+    fontSize: 9,
+    marginTop: -3,
+    marginBottom: 9,
+  },
+
+  templatePickerRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+    marginBottom: 4,
+  },
+
+  templatePill: {
+    borderWidth: 1,
+    borderColor: '#DCE1E5',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FAFAFB',
+  },
+
+  templatePillActive: {
+    borderColor: '#146F7A',
+    backgroundColor: '#EAF3F4',
+  },
+
+  templatePillText: {
+    color: '#5B646C',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  templatePillTextActive: {
+    color: '#146F7A',
   },
 
   quickOptions: {

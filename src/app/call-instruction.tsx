@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -78,6 +78,13 @@ export default function CallInstructionScreen() {
   const { width } = useWindowDimensions();
   const isWide = width >= 1000;
 
+  const params = useLocalSearchParams<{
+    customerId?: string;
+    customerName?: string;
+    customerPhone?: string;
+    templateId?: string;
+  }>();
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
@@ -93,6 +100,23 @@ export default function CallInstructionScreen() {
 
   useEffect(() => {
     fetchCustomers();
+
+    // Arrived from Customers screen with a customer (and maybe a template) already chosen
+    if (params.customerId && params.customerName && params.customerPhone) {
+      setSelectedCustomer({
+        uuid: params.customerId,
+        name: params.customerName,
+        phone: params.customerPhone,
+      });
+
+      const preselectedTemplate = TEMPLATES.find((t) => t.id === params.templateId);
+      if (preselectedTemplate) {
+        setSelectedTemplate(preselectedTemplate);
+        setStep('details');
+      } else {
+        setStep('select_template');
+      }
+    }
   }, []);
 
   const fetchCustomers = async () => {
