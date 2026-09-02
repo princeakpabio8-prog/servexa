@@ -30,6 +30,7 @@ export default function RootLayout() {
         <Stack.Screen name="activity" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="call-instruction" />
+        <Stack.Screen name="call-detail" />
       </Stack>
     </ThemeProvider>
   );

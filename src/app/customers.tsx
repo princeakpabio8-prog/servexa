@@ -30,6 +30,15 @@ type Customer = {
   lastContact: string;
 };
 
+type CustomerActivity = {
+  id: string;
+  call_id?: string;
+  activity_type: string;
+  title: string;
+  description?: string;
+  created_at: string;
+};
+
 const getInitials = (name: string) => {
   return name
     .split(' ')
@@ -79,10 +88,36 @@ export default function CustomersScreen() {
   const [newCustomerReason, setNewCustomerReason] = useState('');
   const [newCustomerAmount, setNewCustomerAmount] = useState('');
   const [newCustomerTemplate, setNewCustomerTemplate] = useState<string | null>(null);
+  const [customerActivities, setCustomerActivities] = useState<CustomerActivity[]>([]);
 
   useEffect(() => {
     fetchCustomers();
   }, []);
+
+  useEffect(() => {
+    if (!selected?.uuid) {
+      setCustomerActivities([]);
+      return;
+    }
+
+    const fetchCustomerActivities = async () => {
+      const { data, error } = await supabase
+        .from('activities')
+        .select('id, call_id, activity_type, title, description, created_at')
+        .eq('customer_id', selected.uuid)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error('Failed to fetch customer activity:', error);
+        return;
+      }
+
+      setCustomerActivities(data ?? []);
+    };
+
+    fetchCustomerActivities();
+  }, [selected?.uuid]);
 
   const fetchCustomers = async () => {
     try {
@@ -625,45 +660,29 @@ export default function CustomersScreen() {
               </Pressable>
             </View>
 
-            {[
-              [
-                'CALL',
-                'Payment reminder call',
-                'Customer asked for a follow-up.',
-                '12 min ago',
-              ],
-              [
-                'FOLLOW-UP',
-                'Follow-up scheduled',
-                `Next contact: ${selected.nextAction}`,
-                '14 min ago',
-              ],
-              [
-                'CALL',
-                'Previous conversation',
-                'AI call completed successfully.',
-                'Yesterday',
-              ],
-            ].map(([type, title, detail, time], index) => (
-              <View
+            {customerActivities.length === 0 ? (
+              <Text style={styles.timelineEmpty}>No recorded interactions yet.</Text>
+            ) : customerActivities.map((item, index) => (
+              <Pressable
                 style={styles.timelineRow}
-                key={`${type}-${index}`}
+                key={item.id}
+                onPress={() => item.call_id && router.push({ pathname: '/call-detail' as any, params: { callId: item.call_id } })}
               >
                 <View style={styles.timelineLine}>
                   <View style={styles.timelineDot} />
-                  {index < 2 && <View style={styles.timelineConnector} />}
+                  {index < customerActivities.length - 1 && <View style={styles.timelineConnector} />}
                 </View>
 
                 <View style={{ flex: 1, paddingBottom: 22 }}>
                   <View style={styles.timelineTop}>
-                    <Text style={styles.timelineType}>{type}</Text>
-                    <Text style={styles.timelineTime}>{time}</Text>
+                    <Text style={styles.timelineType}>{item.activity_type.replace(/_/g, ' ')}</Text>
+                    <Text style={styles.timelineTime}>{new Date(item.created_at).toLocaleDateString()}</Text>
                   </View>
 
-                  <Text style={styles.timelineTitle}>{title}</Text>
-                  <Text style={styles.timelineDetail}>{detail}</Text>
+                  <Text style={styles.timelineTitle}>{item.title}</Text>
+                  <Text style={styles.timelineDetail}>{item.description ?? 'No additional details.'}</Text>
                 </View>
-              </View>
+              </Pressable>
             ))}
           </View>
 
@@ -2009,6 +2028,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 3,
     lineHeight: 15,
+  },
+
+  timelineEmpty: {
+    color: '#8E969F',
+    fontSize: 10,
+    paddingVertical: 18,
   },
 
   modalOverlay: {
