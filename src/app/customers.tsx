@@ -358,7 +358,7 @@ export default function CustomersScreen() {
     const normalizedPhone = normalizePhoneForCall(manualPhone);
 
     if (!normalizedPhone) {
-      Alert.alert('Enter a valid phone number', 'Use a format like +2348032451234.');
+      Alert.alert('Enter a valid phone number', 'Use a format like +12025550100.');
       return;
     }
 
@@ -459,7 +459,7 @@ export default function CustomersScreen() {
           <TextInput
             value={newCustomerPhone}
             onChangeText={setNewCustomerPhone}
-            placeholder="+2348032451234"
+            placeholder="+12025550100"
             placeholderTextColor="#A0A7AE"
             keyboardType="phone-pad"
             style={styles.modalInput}
@@ -659,7 +659,7 @@ export default function CustomersScreen() {
               <TextInput
                 value={manualPhone}
                 onChangeText={setManualPhone}
-                placeholder="+2348032451234"
+                placeholder="+12025550100"
                 placeholderTextColor="#A0A7AE"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -1011,7 +1011,7 @@ export default function CustomersScreen() {
                 <TextInput
                   value={manualPhone}
                   onChangeText={setManualPhone}
-                  placeholder="+2348032451234"
+                  placeholder="+12025550100"
                   placeholderTextColor="#A0A7AE"
                   autoCapitalize="none"
                   autoCorrect={false}
