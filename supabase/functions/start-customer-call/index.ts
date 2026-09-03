@@ -23,6 +23,8 @@ type RequestBody = {
   customer_id?: string;
   phone?: string;
   customer_name?: string;
+  region?: string;
+  locale?: string;
   campaign_id?: string | null;
   task?: string;
   // Human-directed call parameters
@@ -42,6 +44,18 @@ const normalizePhoneForCall = (phone: string) => {
   if (!digits.startsWith('+')) return `+${digits.replace(/\+/g, '')}`;
 
   return digits;
+};
+
+const isE164PhoneNumber = (phone: string) => /^\+[1-9]\d{7,14}$/.test(phone);
+
+const TEMPLATE_OBJECTIVES: Record<string, string> = {
+  loan_recovery: "Discuss the outstanding loan respectfully and identify an appropriate next step.",
+  payment_reminder: "Remind the customer about the payment and ask whether assistance is needed.",
+  payment_confirmation: "Confirm whether the payment was made and identify any discrepancy.",
+  customer_followup: "Reconnect about the prior conversation and confirm the next action.",
+  repayment_assistance: "Understand the customer's situation and discuss available repayment assistance.",
+  account_inquiry: "Address the customer's account question using only verified information.",
+  custom: "Follow the operator's specific customer-care objective.",
 };
 
 const getFallbackOwnerId = async (supabase: ReturnType<typeof createClient>) => {
@@ -152,6 +166,11 @@ serve(async (req: Request) => {
       return json({ error: "Customer does not have a phone number" }, 400);
     }
 
+    const normalizedCustomerPhone = normalizePhoneForCall(customer.phone);
+    if (!isE164PhoneNumber(normalizedCustomerPhone)) {
+      return json({ error: "Customer phone number must be a valid E.164 number" }, 400);
+    }
+
     // Create the SERVEX record before calling CALL-E so the webhook can
     // correlate the external call with the internal customer record.
     const { data: localCall, error: localCallError } = await supabase
@@ -196,8 +215,6 @@ serve(async (req: Request) => {
     const webhookUrl =
       `${supabaseUrl}/functions/v1/calle-webhook`;
 
-    const normalizedCustomerPhone = normalizePhoneForCall(customer.phone);
-
     // Build the system prompt with template/instruction context
     let callPurpose = body.task || "Account inquiry and customer care";
     let customInstructionSection = "";
@@ -225,9 +242,12 @@ ${body.custom_context ? `Additional context for this question: ${body.custom_con
 `;
       }
 
-      if (instructionContext) {
-        callPurpose = `${body.template_name?.replace(/_/g, " ")} - ${instructionContext}`;
-      }
+      const templateObjective = TEMPLATE_OBJECTIVES[body.template_name ?? ""];
+      callPurpose = [
+        templateObjective,
+        instructionContext,
+        body.task,
+      ].filter(Boolean).join(" ") || callPurpose;
     }
 
     // Professional AI system prompt for financial customer care
@@ -332,8 +352,8 @@ Remember: You are representing SERVEXA with professionalism and care. Every cust
       recipients: [
         {
           phones: [normalizedCustomerPhone],
-          region: "NG",
-          locale: "en-NG",
+          region: body.region ?? "NG",
+          locale: body.locale ?? "en-NG",
         },
       ],
       result_schema: {
@@ -447,6 +467,22 @@ Remember: You are representing SERVEXA with professionalism and care. Every cust
     // Current CALL-E Create Call response uses "id".
     const providerCallId =
       typeof calleData.id === "string" ? calleData.id : null;
+
+    if (!providerCallId) {
+      await supabase
+        .from("calls")
+        .update({ status: "failed" })
+        .eq("id", localCall.id)
+        .eq("owner_id", customer.owner_id);
+
+      return json(
+        {
+          error: "CALL-E did not return a provider call id",
+          details: calleData,
+        },
+        502,
+      );
+    }
 
     await supabase
       .from("calls")
