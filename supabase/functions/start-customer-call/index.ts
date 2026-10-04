@@ -174,7 +174,7 @@ serve(async (req: Request) => {
     // Create call instructions record if template/instruction params provided
     if (body.template_name || body.custom_question) {
       const { error: instructionError } = await supabase
-        .from("example-provider-call-id")
+        .from("call_instructions")
         .insert({
           call_id: localCall.id,
           owner_id: customer.owner_id,
@@ -188,7 +188,7 @@ serve(async (req: Request) => {
         });
 
       if (instructionError) {
-        console.warn("Failed to create example-provider-call-id:", instructionError);
+        console.warn("Failed to create call_instructions:", instructionError);
         // Don't fail the entire call if instruction record fails
       }
     }
@@ -332,8 +332,6 @@ Remember: You are representing SERVEXA with professionalism and care. Every cust
       recipients: [
         {
           phones: [normalizedCustomerPhone],
-          region: "NG",
-          locale: "en-NG",
         },
       ],
       result_schema: {

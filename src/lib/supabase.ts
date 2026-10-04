@@ -18,16 +18,25 @@ export const supabase = createClient(
   }
 );
 
-// Every workspace user needs an authenticated session for row-level security
-// to allow reading/writing their own data. Sign in anonymously if no session exists.
+/**
+ * Returns the current session if one exists, or null.
+ * Does NOT create anonymous sessions — every customer must register with
+ * a real email/password account so their workspace is properly isolated.
+ */
 export async function ensureSession() {
   const { data } = await supabase.auth.getSession();
-  if (data.session) return data.session;
+  return data.session ?? null;
+}
 
-  const { data: signInData, error } = await supabase.auth.signInAnonymously();
-  if (error) {
-    console.error('Failed to establish anonymous session:', error);
-    return null;
-  }
-  return signInData.session;
+/**
+ * Returns true if the current session belongs to a real (non-anonymous)
+ * registered user. Anonymous sessions are treated as unauthenticated for
+ * routing purposes.
+ */
+export async function hasRealSession(): Promise<boolean> {
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) return false;
+  // Supabase marks anonymous users with is_anonymous in user metadata
+  const isAnon = data.session.user?.is_anonymous === true;
+  return !isAnon;
 }

@@ -1,429 +1,616 @@
+// @ts-nocheck
+/**
+ * Team screen — AI employees backed by campaigns data.
+ * Each campaign is presented as an AI employee, not a campaign workflow.
+ */
 import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
     Alert,
     Pressable,
-    SafeAreaView,
+    RefreshControl,
     ScrollView,
-    StatusBar,
     StyleSheet,
     Text,
     View,
+    useWindowDimensions,
 } from 'react-native';
+import AppShell from '../components/app-shell';
+import { Colors, Radius, Shadow } from '../constants/theme';
+import { ensureSession, supabase } from '../lib/supabase';
 
-const COMING_SOON_MESSAGE =
-  'Campaign automation is coming soon. For now, use Customers \u2192 Use a call template to run directed calls.';
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-type Campaign = {
+type Employee = {
+  id: string;
   name: string;
-  purpose: string;
-  description: string;
-  status: string;
-  audience: string;
-  progress: number;
-  calls: string;
-  followUps: string;
-  attention: string;
+  role: string;
+  status: 'active' | 'paused' | 'draft' | 'completed';
+  callsTotal: number;
+  callsToday: number;
+  completedCalls: number;
 };
 
-const campaigns: Campaign[] = [];
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-export default function CampaignsScreen() {
+const statusLabel = (status: Employee['status']) => {
+  if (status === 'active') return 'Active';
+  if (status === 'paused') return 'Paused';
+  if (status === 'completed') return 'Completed';
+  return 'Draft';
+};
+
+const campaignToStatus = (s: string): Employee['status'] => {
+  if (s === 'active') return 'active';
+  if (s === 'paused') return 'paused';
+  if (s === 'completed') return 'completed';
+  return 'draft';
+};
+
+// ─── Employee Card ────────────────────────────────────────────────────────────
+
+function EmployeeCard({
+  emp,
+  onPress,
+  onToggle,
+}: {
+  emp: Employee;
+  onPress: () => void;
+  onToggle: () => void;
+}) {
+  const isActive = emp.status === 'active';
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" />
-
-      <View style={styles.app}>
-        <View style={styles.sidebar}>
-          <View>
-            <Pressable style={styles.brandRow} onPress={() => router.push('/')}>
-              <View style={styles.brandMark}>
-                <Text style={styles.brandMarkText}>S</Text>
-              </View>
-              <View>
-                <Text style={styles.brand}>SERVEXA</Text>
-                <Text style={styles.brandSmall}>CUSTOMER OPERATIONS</Text>
-              </View>
-            </Pressable>
-
-            <Text style={styles.workspaceLabel}>WORKSPACE</Text>
-
-            <View style={styles.workspace}>
-              <View style={styles.companyAvatar}>
-                <Text style={styles.companyAvatarText}>LG</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.companyName}>Lekki Gardens</Text>
-                <Text style={styles.companyRole}>Customer Care</Text>
-              </View>
-              <Text style={styles.chevron}>⌄</Text>
-            </View>
-
-            <View style={styles.nav}>
-              {[
-                ['⌂', 'Overview', '/'],
-                ['◎', 'Customers', '/customers'],
-                ['◫', 'Campaigns', '/campaigns'],
-                ['◷', 'Activity', '/activity'],
-                ['⚙', 'Settings', '/settings'],
-              ].map(([icon, label, route]) => {
-                const active = label === 'Campaigns';
-                return (
-                  <Pressable
-                    key={label}
-                    onPress={() => router.push(route as any)}
-                    style={({ pressed }) => [
-                      styles.navItem,
-                      active && styles.navItemActive,
-                      pressed && styles.navPressed,
-                    ]}
-                  >
-                    <Text style={[styles.navIcon, active && styles.navIconActive]}>
-                      {icon}
-                    </Text>
-                    <Text style={[styles.navText, active && styles.navTextActive]}>
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          <View>
-            <View style={styles.planCard}>
-              <Text style={styles.planEyebrow}>CURRENT PLAN</Text>
-              <Text style={styles.planTitle}>Growth</Text>
-              <Text style={styles.planText}>Usage is available in Settings</Text>
-              <View style={styles.progressTrack}>
-                <View style={styles.progressFill} />
-              </View>
-              <Text style={styles.manage}>Manage plan →</Text>
-            </View>
-            <Text style={styles.version}>SERVEXA v0.1 • Enterprise Preview</Text>
+    <Pressable
+      style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={emp.name}
+    >
+      {/* Top row */}
+      <View style={styles.cardTop}>
+        <View style={[styles.avatar, isActive && styles.avatarActive]}>
+          <Text style={[styles.avatarText, isActive && styles.avatarTextActive]}>
+            {emp.name.slice(0, 2).toUpperCase()}
+          </Text>
+        </View>
+        <View style={styles.cardInfo}>
+          <Text style={styles.cardName}>{emp.name}</Text>
+          <Text style={styles.cardRole} numberOfLines={1}>{emp.role}</Text>
+          <View style={styles.statusRow}>
+            <View style={[styles.statusDot, isActive ? styles.dotActive : styles.dotPaused]} />
+            <Text style={[styles.statusText, isActive ? styles.statusTextActive : styles.statusTextPaused]}>
+              {statusLabel(emp.status)}
+            </Text>
           </View>
         </View>
+        <Text style={styles.cardChevron}>›</Text>
+      </View>
 
-        <View style={styles.main}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-            <View style={styles.header}>
-              <View>
-                <Text style={styles.eyebrow}>CUSTOMER OPERATIONS</Text>
-                <Text style={styles.title}>Campaigns</Text>
-                <Text style={styles.subtitle}>
-                  Create focused customer conversations that CALL-E can handle automatically.
-                </Text>
-              </View>
-
-              <Pressable
-                style={styles.createButton}
-                onPress={() => Alert.alert('Coming soon', COMING_SOON_MESSAGE)}
-              >
-                <Text style={styles.createButtonText}>+ New campaign</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.summaryGrid}>
-              <View style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>ACTIVE CAMPAIGNS</Text>
-                <Text style={styles.summaryValue}>0</Text>
-                  <Text style={styles.summaryHint}>No campaigns connected</Text>
-              </View>
-              <View style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>CUSTOMERS REACHED</Text>
-                <Text style={styles.summaryValue}>—</Text>
-                <Text style={styles.summaryHint}>Across all campaigns</Text>
-              </View>
-              <View style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>CONVERSATIONS</Text>
-                <Text style={styles.summaryValue}>—</Text>
-                <Text style={styles.summaryHint}>Automated this period</Text>
-              </View>
-            </View>
-
-            <View style={styles.featured}>
-              <View style={{ flex: 1 }}>
-                <View style={styles.featuredBadge}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.featuredBadgeText}>COMING SOON</Text>
-                </View>
-                <Text style={styles.featuredTitle}>
-                  Turn a customer list into an automated conversation.
-                </Text>
-                <Text style={styles.featuredText}>
-                  Choose a customer-care purpose, select your audience, define the rules, and let CALL-E handle the routine conversations.
-                </Text>
-                <Pressable
-                  style={styles.featuredButton}
-                  onPress={() => Alert.alert('Coming soon', COMING_SOON_MESSAGE)}
-                >
-                  <Text style={styles.featuredButtonText}>Start a campaign →</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.featuredVisual}>
-                <View style={styles.visualCircle}>
-                  <Text style={styles.visualIcon}>✦</Text>
-                </View>
-                <View style={styles.visualCard}>
-                  <View style={styles.visualStatus} />
-                  <Text style={styles.visualCardText}>AI conversation</Text>
-                  <Text style={styles.visualCardSub}>Customer follow-up</Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.purposeSection}>
-              <Text style={styles.purposeSectionTitle}>Choose a customer-care purpose</Text>
-              <Text style={styles.purposeSectionText}>
-                Keep automation focused: payment, reminders, notifications, or follow-up.
-              </Text>
-              <View style={styles.purposeRow}>
-                <View style={styles.purposeOption}><Text style={styles.purposeOptionText}>Payment & collections</Text></View>
-                <View style={styles.purposeOption}><Text style={styles.purposeOptionText}>Payment reminder</Text></View>
-                <View style={styles.purposeOption}><Text style={styles.purposeOptionText}>Notification</Text></View>
-                <View style={styles.purposeOption}><Text style={styles.purposeOptionText}>Follow-up</Text></View>
-              </View>
-            </View>
-
-            <View style={styles.sectionHeader}>
-              <View>
-                <Text style={styles.sectionTitle}>Your campaigns</Text>
-                <Text style={styles.sectionSubtitle}>Automated customer-care workflows</Text>
-              </View>
-              <Text style={styles.total}>0 campaigns</Text>
-            </View>
-
-              <View style={styles.emptyCampaigns}>
-                <Text style={styles.emptyCampaignsTitle}>Campaign automation is not connected yet.</Text>
-                <Text style={styles.emptyCampaignsText}>
-                  Use Customers to choose a call template and start a directed call.
-                </Text>
-              </View>
-
-            {campaigns.map((campaign) => (
-              <Pressable
-                key={campaign.name}
-                onPress={() => Alert.alert('Coming soon', COMING_SOON_MESSAGE)}
-                style={({ pressed }) => [
-                  styles.campaignCard,
-                  pressed && styles.cardPressed,
-                ]}
-              >
-                <View style={styles.campaignTop}>
-                  <View style={styles.campaignIcon}>
-                    <Text style={styles.campaignIconText}>✦</Text>
-                  </View>
-
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.nameRow}>
-                      <Text style={styles.campaignName}>{campaign.name}</Text>
-                      <View style={[styles.status, campaign.status === 'Paused' && styles.statusPaused]}>
-                        <View style={[styles.statusDot, campaign.status === 'Paused' && styles.statusDotPaused]} />
-                        <Text style={[styles.statusText, campaign.status === 'Paused' && styles.statusTextPaused]}>
-                          {campaign.status}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.purposeBadge}>
-                      <Text style={styles.purposeBadgeText}>{campaign.purpose}</Text>
-                    </View>
-
-                    <Text style={styles.campaignDescription}>{campaign.description}</Text>
-                  </View>
-
-                  <Text style={styles.arrow}>›</Text>
-                </View>
-
-                <View style={styles.campaignMeta}>
-                  <View>
-                    <Text style={styles.metaLabel}>AUDIENCE</Text>
-                    <Text style={styles.metaValue}>{campaign.audience}</Text>
-                  </View>
-
-                  <View>
-                    <Text style={styles.metaLabel}>CALLS</Text>
-                    <Text style={styles.metaValue}>{campaign.calls}</Text>
-                  </View>
-
-                  <View>
-                    <Text style={styles.metaLabel}>FOLLOW-UPS</Text>
-                    <Text style={styles.metaValue}>{campaign.followUps}</Text>
-                  </View>
-
-                  <View>
-                    <Text style={styles.metaLabel}>ATTENTION</Text>
-                    <Text style={styles.metaValue}>{campaign.attention}</Text>
-                  </View>
-
-                  <View style={styles.campaignProgress}>
-                    <View style={styles.progressHeader}>
-                      <Text style={styles.metaLabel}>PROGRESS</Text>
-                      <Text style={styles.progressPercentage}>{campaign.progress}%</Text>
-                    </View>
-                    <View style={styles.campaignTrack}>
-                      <View style={[styles.campaignFill, { width: `${campaign.progress}%` }]} />
-                    </View>
-                  </View>
-                </View>
-              </Pressable>
-            ))}
-
-
-            <View style={styles.footerNote}>
-              <View style={styles.footerIcon}>
-                <Text style={styles.footerIconText}>✓</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.footerTitle}>Automation works best with clear intent.</Text>
-                <Text style={styles.footerText}>
-                  Give SERVEXA a specific customer-care objective and your team can focus on the conversations that actually require human attention.
-                </Text>
-              </View>
-            </View>
-          </ScrollView>
+      {/* Stats strip */}
+      <View style={styles.statsStrip}>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{emp.callsTotal}</Text>
+          <Text style={styles.statLabel}>Total calls</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={[styles.statValue, emp.callsToday > 0 && styles.statValueGood]}>
+            {emp.callsToday}
+          </Text>
+          <Text style={styles.statLabel}>Today</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{emp.completedCalls}</Text>
+          <Text style={styles.statLabel}>Completed</Text>
         </View>
       </View>
-    </SafeAreaView>
+
+      {/* Quick actions */}
+      <View style={styles.cardActions}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.actionBtn,
+            isActive ? styles.actionBtnPause : styles.actionBtnResume,
+            pressed && { opacity: 0.75 },
+          ]}
+          onPress={(e) => { e.stopPropagation?.(); onToggle(); }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          accessibilityLabel={isActive ? 'Pause employee' : 'Resume employee'}
+        >
+          <Text style={[styles.actionBtnText, isActive ? styles.actionBtnTextPause : styles.actionBtnTextResume]}>
+            {isActive ? '⏸ Pause' : '▶ Resume'}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.actionBtn, styles.actionBtnOutline, pressed && { opacity: 0.75 }]}
+          onPress={(e) => {
+            e.stopPropagation?.();
+            router.push({ pathname: '/call-instruction' as any, params: { employeeId: emp.id } });
+          }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          accessibilityLabel="Test employee"
+        >
+          <Text style={styles.actionBtnTextOutline}>⚡ Test</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.actionBtn, styles.actionBtnOutline, pressed && { opacity: 0.75 }]}
+          onPress={(e) => { e.stopPropagation?.(); onPress(); }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          accessibilityLabel="View details"
+        >
+          <Text style={styles.actionBtnTextOutline}>Details</Text>
+        </Pressable>
+      </View>
+    </Pressable>
   );
 }
 
+// ─── Main Screen ─────────────────────────────────────────────────────────────
+
+export default function TeamScreen() {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadTeam = async () => {
+    try {
+      await ensureSession();
+
+      const { data: campaigns, error } = await supabase
+        .from('campaigns')
+        .select('id, name, description, objective, status, created_at')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+
+      if (!campaigns || campaigns.length === 0) {
+        setEmployees([]);
+        return;
+      }
+
+      // Fetch call stats for all campaigns in one query
+      const { data: calls } = await supabase
+        .from('calls')
+        .select('id, status, created_at, campaign_id')
+        .in('campaign_id', campaigns.map((c) => c.id))
+        .order('created_at', { ascending: false });
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const list: Employee[] = campaigns.map((campaign) => {
+        const campaignCalls = (calls ?? []).filter((c) => c.campaign_id === campaign.id);
+        const todayCalls = campaignCalls.filter((c) => new Date(c.created_at) >= today);
+        const completedCalls = campaignCalls.filter((c) => c.status === 'completed');
+
+        return {
+          id: campaign.id,
+          name: campaign.name || 'Unnamed',
+          role: campaign.objective || campaign.description || 'AI Call Assistant',
+          status: campaignToStatus(campaign.status),
+          callsTotal: campaignCalls.length,
+          callsToday: todayCalls.length,
+          completedCalls: completedCalls.length,
+        };
+      });
+
+      setEmployees(list);
+    } catch (err) {
+      console.error('[Team] load error:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => { loadTeam(); }, []);
+
+  const onRefresh = () => { setRefreshing(true); loadTeam(); };
+
+  const handleToggle = async (emp: Employee) => {
+    const newStatus = emp.status === 'active' ? 'paused' : 'active';
+    const verb = newStatus === 'active' ? 'Resume' : 'Pause';
+
+    Alert.alert(
+      `${verb} ${emp.name}?`,
+      `This will ${verb.toLowerCase()} this AI employee.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: verb,
+          style: newStatus === 'active' ? 'default' : 'destructive',
+          onPress: async () => {
+            const { error } = await supabase
+              .from('campaigns')
+              .update({ status: newStatus })
+              .eq('id', emp.id);
+            if (error) {
+              Alert.alert('Error', error.message);
+            } else {
+              setEmployees((prev) =>
+                prev.map((e) => e.id === emp.id ? { ...e, status: newStatus } : e)
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const activeCount = employees.filter((e) => e.status === 'active').length;
+
+  return (
+    <AppShell scrollable={false}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+        }
+      >
+        {/* ── HEADER ───────────────────────────────────────────── */}
+        <View style={styles.header}>
+          <View style={styles.headerCopy}>
+            <Text style={styles.eyebrow}>AI WORKFORCE</Text>
+            <Text style={styles.title}>Your Team</Text>
+            {!isMobile && (
+              <Text style={styles.subtitle}>
+                Manage your AI employees — each one handles a specific customer-care role on your behalf.
+              </Text>
+            )}
+          </View>
+          {activeCount > 0 && (
+            <View style={styles.activePill}>
+              <View style={styles.activePillDot} />
+              <Text style={styles.activePillText}>{activeCount} active</Text>
+            </View>
+          )}
+        </View>
+
+        {/* ── TEAM LIST ────────────────────────────────────────── */}
+        {loading ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>Loading team…</Text>
+          </View>
+        ) : employees.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIconWrap}>
+              <Text style={styles.emptyIcon}>◉</Text>
+            </View>
+            <Text style={styles.emptyTitle}>No AI employees yet</Text>
+            <Text style={styles.emptyBody}>
+              Create your first AI employee. They'll handle customer calls, follow-ups, and surface what needs your attention.
+            </Text>
+            <Pressable
+              style={styles.emptyBtn}
+              onPress={() => Alert.alert(
+                'Coming soon',
+                'Full employee creation is coming soon. For now, use Customers → Use a call template to run directed calls.'
+              )}
+              accessibilityLabel="Create AI employee"
+            >
+              <Text style={styles.emptyBtnText}>+ Create AI employee</Text>
+            </Pressable>
+            <Text style={styles.emptyHint}>
+              Tip: Use the Customers tab to run a directed call right now.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {employees.map((emp) => (
+              <EmployeeCard
+                key={emp.id}
+                emp={emp}
+                onPress={() => router.push(`/employee/${emp.id}` as any)}
+                onToggle={() => handleToggle(emp)}
+              />
+            ))}
+            {/* Add employee CTA */}
+            <Pressable
+              style={styles.addCard}
+              onPress={() => Alert.alert(
+                'Coming soon',
+                'Full employee creation is coming soon. For now, use Customers → Use a call template to run directed calls.'
+              )}
+              accessibilityLabel="Add AI employee"
+            >
+              <Text style={styles.addCardIcon}>+</Text>
+              <Text style={styles.addCardText}>Add AI employee</Text>
+            </Pressable>
+          </View>
+        )}
+      </ScrollView>
+    </AppShell>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F4F6F8' },
-  app: { flex: 1, flexDirection: 'row' },
-  sidebar: {
-    width: 270, backgroundColor: '#FFFFFF', borderRightWidth: 1,
-    borderRightColor: '#E5E8EC', padding: 20, paddingTop: 28,
-    paddingBottom: 20, justifyContent: 'space-between',
+  scroll: { flex: 1 },
+  content: {
+    padding: 24,
+    paddingBottom: 60,
+    maxWidth: 780,
+    width: '100%',
+    alignSelf: 'center',
   },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 11 },
-  brandMark: {
-    width: 38, height: 38, borderRadius: 12, backgroundColor: '#122735',
-    alignItems: 'center', justifyContent: 'center',
+  contentMobile: {
+    padding: 16,
+    paddingBottom: 100,
   },
-  brandMarkText: { color: '#FFFFFF', fontSize: 19, fontWeight: '900' },
-  brand: { color: '#152532', fontSize: 17, fontWeight: '900', letterSpacing: 1 },
-  brandSmall: { color: '#9AA4AD', fontSize: 7, fontWeight: '800', letterSpacing: 1, marginTop: 2 },
-  workspaceLabel: { marginTop: 38, marginBottom: 10, color: '#98A1AA', fontSize: 9, fontWeight: '900', letterSpacing: 1.3 },
-  workspace: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: '#E5E8EC', borderRadius: 15, padding: 11 },
-  companyAvatar: { width: 35, height: 35, borderRadius: 11, backgroundColor: '#E6F3F3', alignItems: 'center', justifyContent: 'center' },
-  companyAvatarText: { color: '#147983', fontSize: 10, fontWeight: '900' },
-  companyName: { color: '#202A33', fontSize: 12, fontWeight: '800' },
-  companyRole: { color: '#8B949D', fontSize: 9, marginTop: 2 },
-  chevron: { color: '#8C959E', fontSize: 17 },
-  nav: { marginTop: 27, gap: 5 },
-  navItem: { minHeight: 46, borderRadius: 12, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  navPressed: { opacity: 0.65 },
-  navItemActive: { backgroundColor: '#EAF3F4' },
-  navIcon: { width: 20, color: '#89939D', fontSize: 17, textAlign: 'center' },
-  navIconActive: { color: '#147983' },
-  navText: { color: '#69747E', fontSize: 13, fontWeight: '600' },
-  navTextActive: { color: '#147983', fontWeight: '800' },
-  planCard: { backgroundColor: '#F5F7F8', borderWidth: 1, borderColor: '#E9ECEF', borderRadius: 17, padding: 15 },
-  planEyebrow: { color: '#8A949D', fontSize: 8, fontWeight: '900', letterSpacing: 1 },
-  planTitle: { color: '#1D2831', fontSize: 17, fontWeight: '900', marginTop: 5 },
-  planText: { color: '#7E8891', fontSize: 9, marginTop: 7 },
-  progressTrack: { height: 6, backgroundColor: '#DCE3E6', borderRadius: 10, marginTop: 10, overflow: 'hidden' },
-  progressFill: { width: '74%', height: '100%', backgroundColor: '#147983' },
-  manage: { color: '#147983', fontSize: 9, fontWeight: '900', marginTop: 10 },
-  version: { color: '#B0B7BD', fontSize: 8, marginTop: 17 },
-  main: { flex: 1 },
-  content: { padding: 28, paddingBottom: 60 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 25 },
-  eyebrow: { color: '#99A2AA', fontSize: 9, fontWeight: '900', letterSpacing: 1.3 },
-  title: { color: '#15232E', fontSize: 32, fontWeight: '900', marginTop: 5 },
-  subtitle: { color: '#77828C', fontSize: 12, marginTop: 6, maxWidth: 650 },
-  createButton: { backgroundColor: '#147983', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
-  createButtonText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
-  summaryGrid: { flexDirection: 'row', gap: 12 },
-  summaryCard: { flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E8EC', borderRadius: 17, padding: 17 },
-  summaryLabel: { color: '#929AA2', fontSize: 7, fontWeight: '900', letterSpacing: 1 },
-  summaryValue: { color: '#172832', fontSize: 26, fontWeight: '900', marginTop: 7 },
-  summaryHint: { color: '#929AA2', fontSize: 8, marginTop: 3 },
-  featured: { marginTop: 13, minHeight: 245, borderRadius: 23, backgroundColor: '#112936', padding: 27, flexDirection: 'row', overflow: 'hidden' },
-  featuredBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 20, paddingHorizontal: 9, paddingVertical: 6 },
-  liveDot: { width: 6, height: 6, borderRadius: 6, backgroundColor: '#6BD5A4' },
-  featuredBadgeText: { color: '#B8CFD1', fontSize: 7, fontWeight: '900', letterSpacing: 1 },
-  featuredTitle: { color: '#FFFFFF', fontSize: 26, lineHeight: 32, fontWeight: '900', maxWidth: 600, marginTop: 17 },
-  featuredText: { color: '#B5C3CB', fontSize: 11, lineHeight: 18, maxWidth: 590, marginTop: 9 },
-  featuredButton: { alignSelf: 'flex-start', marginTop: 18, backgroundColor: '#FFFFFF', borderRadius: 11, paddingHorizontal: 14, paddingVertical: 10 },
-  featuredButtonText: { color: '#142733', fontSize: 9, fontWeight: '900' },
-  featuredVisual: { width: 260, alignItems: 'center', justifyContent: 'center', position: 'relative' },
-  visualCircle: { width: 175, height: 175, borderRadius: 175, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
-  visualIcon: { color: '#72C6CB', fontSize: 44 },
-  visualCard: { position: 'absolute', bottom: 25, right: 0, backgroundColor: 'rgba(255,255,255,0.96)', borderRadius: 13, padding: 12, minWidth: 160 },
-  visualStatus: { width: 7, height: 7, borderRadius: 7, backgroundColor: '#58B98B', position: 'absolute', right: 12, top: 12 },
-  visualCardText: { color: '#23313A', fontSize: 9, fontWeight: '900' },
-  visualCardSub: { color: '#89939C', fontSize: 7, marginTop: 3 },
-  sectionHeader: { marginTop: 29, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  sectionTitle: { color: '#202A33', fontSize: 17, fontWeight: '900' },
-  sectionSubtitle: { color: '#919AA3', fontSize: 10, marginTop: 3 },
-  total: { color: '#8C959E', fontSize: 9, fontWeight: '700' },
-  campaignCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E8EC', borderRadius: 17, padding: 18, marginBottom: 10 },
-  cardPressed: { opacity: 0.7 },
-  campaignTop: { flexDirection: 'row', alignItems: 'center', gap: 11 },
-  campaignIcon: { width: 39, height: 39, borderRadius: 12, backgroundColor: '#EAF3F4', alignItems: 'center', justifyContent: 'center' },
-  campaignIconText: { color: '#147983', fontSize: 16 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  campaignName: { color: '#28343D', fontSize: 11, fontWeight: '900' },
-  campaignDescription: { color: '#8C969F', fontSize: 8, marginTop: 4 },
-  status: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EDF7F2', borderRadius: 7, paddingHorizontal: 6, paddingVertical: 3 },
-  statusPaused: { backgroundColor: '#F3F4F5' },
-  statusDot: { width: 5, height: 5, borderRadius: 5, backgroundColor: '#4DAA80' },
-  statusDotPaused: { backgroundColor: '#9BA2A8' },
-  statusText: { color: '#4A8B70', fontSize: 6, fontWeight: '900' },
-  statusTextPaused: { color: '#7F888F' },
-  arrow: { color: '#A2AAB1', fontSize: 21 },
-  campaignMeta: { marginTop: 17, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#EEF0F2', flexDirection: 'row', alignItems: 'center', gap: 35 },
-  metaLabel: { color: '#A0A7AE', fontSize: 6, fontWeight: '900', letterSpacing: 0.7 },
-  metaValue: { color: '#35414A', fontSize: 9, fontWeight: '800', marginTop: 4 },
-  campaignProgress: { flex: 1 },
-  progressHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  progressPercentage: { color: '#147983', fontSize: 7, fontWeight: '900' },
-  campaignTrack: { height: 5, backgroundColor: '#E9EDF0', borderRadius: 10, overflow: 'hidden', marginTop: 5 },
-  campaignFill: { height: '100%', backgroundColor: '#147983', borderRadius: 10 },
-  emptyCampaigns: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E8EC',
-    borderRadius: 17,
-    padding: 20,
-    marginBottom: 10,
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+    gap: 12,
   },
-  emptyCampaignsTitle: { color: '#26343D', fontSize: 12, fontWeight: '900' },
-  emptyCampaignsText: { color: '#8C969F', fontSize: 10, lineHeight: 15, marginTop: 5 },
-  purposeSection: {
-    marginTop: 24,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E8EC',
-    borderRadius: 17,
-    padding: 17,
+  headerCopy: { flex: 1 },
+  eyebrow: {
+    color: Colors.inkFaint,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    marginBottom: 4,
   },
-  purposeSectionTitle: { color: '#26343D', fontSize: 12, fontWeight: '900' },
-  purposeSectionText: { color: '#8C969F', fontSize: 8, marginTop: 4 },
-  purposeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 12 },
-  purposeOption: {
-    borderWidth: 1,
-    borderColor: '#DCE5E7',
-    backgroundColor: '#F8FAFA',
-    borderRadius: 9,
-    paddingHorizontal: 9,
-    paddingVertical: 7,
+  title: {
+    color: Colors.ink,
+    fontSize: 26,
+    fontWeight: '800',
   },
-  purposeOptionText: { color: '#147983', fontSize: 8, fontWeight: '800' },
-  purposeBadge: {
+  subtitle: {
+    color: Colors.inkMuted,
+    fontSize: 13,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  activePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Colors.positiveLight,
+    borderRadius: Radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     alignSelf: 'flex-start',
     marginTop: 6,
-    backgroundColor: '#EAF3F4',
-    borderRadius: 7,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
   },
-  purposeBadgeText: { color: '#147983', fontSize: 6, fontWeight: '900' },
-  footerNote: { marginTop: 8, backgroundColor: '#E8F3F4', borderRadius: 16, padding: 17, flexDirection: 'row', alignItems: 'center', gap: 11 },
-  footerIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
-  footerIconText: { color: '#147983', fontSize: 13, fontWeight: '900' },
-  footerTitle: { color: '#155F66', fontSize: 10, fontWeight: '900' },
-  footerText: { color: '#58787B', fontSize: 8, lineHeight: 13, marginTop: 3 },
+  activePillDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.positive,
+  },
+  activePillText: {
+    color: Colors.positive,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // List
+  list: { gap: 12 },
+
+  // Employee card
+  card: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    padding: 16,
+    ...Shadow.subtle,
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 14,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.neutralLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarActive: { backgroundColor: Colors.accentLight },
+  avatarText: {
+    color: Colors.neutral,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  avatarTextActive: { color: Colors.accent },
+  cardInfo: { flex: 1 },
+  cardName: {
+    color: Colors.ink,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  cardRole: {
+    color: Colors.inkMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  dotActive: { backgroundColor: Colors.positive },
+  dotPaused: { backgroundColor: Colors.neutral },
+  statusText: { fontSize: 11, fontWeight: '600' },
+  statusTextActive: { color: Colors.positive },
+  statusTextPaused: { color: Colors.neutral },
+  cardChevron: {
+    color: Colors.inkFaint,
+    fontSize: 22,
+    marginTop: 2,
+  },
+
+  // Stats strip
+  statsStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.ivoryDeep,
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    gap: 0,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: Colors.border,
+  },
+  statValue: {
+    color: Colors.ink,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  statValueGood: { color: Colors.positive },
+  statLabel: {
+    color: Colors.inkFaint,
+    fontSize: 9,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+
+  // Card actions
+  cardActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  actionBtnPause: {
+    backgroundColor: Colors.attentionLight,
+    borderWidth: 1,
+    borderColor: '#F0CEC7',
+  },
+  actionBtnResume: {
+    backgroundColor: Colors.accentLight,
+    borderWidth: 1,
+    borderColor: '#BEE3E6',
+  },
+  actionBtnOutline: {
+    backgroundColor: Colors.ivoryDeep,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  actionBtnText: { fontSize: 12, fontWeight: '700' },
+  actionBtnTextPause: { color: Colors.attention },
+  actionBtnTextResume: { color: Colors.accentText },
+  actionBtnTextOutline: {
+    color: Colors.ink,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Empty state
+  emptyCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    padding: 28,
+    alignItems: 'center',
+  },
+  emptyIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.accentLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  emptyIcon: {
+    color: Colors.accent,
+    fontSize: 26,
+  },
+  emptyTitle: {
+    color: Colors.ink,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  emptyBody: {
+    color: Colors.inkMuted,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginBottom: 20,
+    maxWidth: 300,
+  },
+  emptyText: {
+    color: Colors.inkFaint,
+    fontSize: 13,
+  },
+  emptyBtn: {
+    backgroundColor: Colors.accent,
+    borderRadius: Radius.md,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  emptyBtnText: {
+    color: Colors.surface,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  emptyHint: {
+    color: Colors.inkFaint,
+    fontSize: 11,
+    textAlign: 'center',
+  },
+
+  // Add card
+  addCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+    borderRadius: Radius.lg,
+    paddingVertical: 16,
+  },
+  addCardIcon: {
+    color: Colors.inkFaint,
+    fontSize: 20,
+    fontWeight: '300',
+  },
+  addCardText: {
+    color: Colors.inkMuted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
 });

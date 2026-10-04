@@ -51,7 +51,7 @@ create table if not exists public.calls (
 );
 
 -- CALL OUTCOMES
-create table if not exists public.example-provider-call-id (
+create table if not exists public.call_outcomes (
   id uuid primary key default gen_random_uuid(),
   call_id uuid not null unique references public.calls(id) on delete cascade,
   outcome text not null,
@@ -116,7 +116,7 @@ create index if not exists activities_created_at_idx on public.activities(create
 alter table public.customers enable row level security;
 alter table public.campaigns enable row level security;
 alter table public.calls enable row level security;
-alter table public.example-provider-call-id enable row level security;
+alter table public.call_outcomes enable row level security;
 alter table public.follow_ups enable row level security;
 alter table public.activities enable row level security;
 
@@ -146,22 +146,22 @@ create policy "Users can update their own calls"
   on public.calls for update using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
 
 create policy "Users can view outcomes for their calls"
-  on public.example-provider-call-id for select
+  on public.call_outcomes for select
   using (exists (
     select 1 from public.calls
-    where calls.id = example-provider-call-id.call_id and calls.owner_id = auth.uid()
+    where calls.id = call_outcomes.call_id and calls.owner_id = auth.uid()
   ));
 create policy "Users can create outcomes for their calls"
-  on public.example-provider-call-id for insert
+  on public.call_outcomes for insert
   with check (exists (
     select 1 from public.calls
-    where calls.id = example-provider-call-id.call_id and calls.owner_id = auth.uid()
+    where calls.id = call_outcomes.call_id and calls.owner_id = auth.uid()
   ));
 create policy "Users can update outcomes for their calls"
-  on public.example-provider-call-id for update
+  on public.call_outcomes for update
   using (exists (
     select 1 from public.calls
-    where calls.id = example-provider-call-id.call_id and calls.owner_id = auth.uid()
+    where calls.id = call_outcomes.call_id and calls.owner_id = auth.uid()
   ));
 
 create policy "Users can view their own follow ups"
@@ -201,8 +201,8 @@ create trigger calls_set_updated_at
 before update on public.calls
 for each row execute function public.set_updated_at();
 
-create trigger example-provider-call-id
-before update on public.example-provider-call-id
+create trigger call_outcomes_set_updated_at
+before update on public.call_outcomes
 for each row execute function public.set_updated_at();
 
 create trigger follow_ups_set_updated_at

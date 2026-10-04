@@ -13,8 +13,10 @@ import {
     Text,
     TextInput,
     View,
-    useWindowDimensions
+    useWindowDimensions,
 } from 'react-native';
+import AppShell from '../components/app-shell';
+import { Colors, Radius } from '../constants/theme';
 import { ensureSession, supabase } from '../lib/supabase';
 
 type CustomerStatus = 'Active' | 'Follow-up' | 'Attention' | 'Resolved';
@@ -39,6 +41,15 @@ type CustomerActivity = {
   title: string;
   description?: string;
   created_at: string;
+};
+
+type CustomerCall = {
+  id: string;
+  status: string;
+  duration_seconds: number | null;
+  created_at: string;
+  outcome: string | null;
+  employeeName: string | null;
 };
 
 const getInitials = (name: string) => {
@@ -72,6 +83,7 @@ const nav = [
 export default function CustomersScreen() {
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
+  const isMobile = width < 768;
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,6 +104,8 @@ export default function CustomersScreen() {
   const [newCustomerAmount, setNewCustomerAmount] = useState('');
   const [newCustomerTemplate, setNewCustomerTemplate] = useState<string | null>(null);
   const [customerActivities, setCustomerActivities] = useState<CustomerActivity[]>([]);
+  const [customerCalls, setCustomerCalls] = useState<CustomerCall[]>([]);
+  const [callsLoading, setCallsLoading] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -100,6 +114,7 @@ export default function CustomersScreen() {
   useEffect(() => {
     if (!selected?.uuid) {
       setCustomerActivities([]);
+      setCustomerCalls([]);
       return;
     }
 
@@ -119,7 +134,50 @@ export default function CustomersScreen() {
       setCustomerActivities(data ?? []);
     };
 
+    const fetchCustomerCalls = async () => {
+      setCallsLoading(true);
+      try {
+        const { data: calls } = await supabase
+          .from('calls')
+          .select('id, status, duration_seconds, created_at, campaign_id')
+          .eq('customer_id', selected.uuid)
+          .order('created_at', { ascending: false })
+          .limit(15);
+
+        if (!calls || calls.length === 0) {
+          setCustomerCalls([]);
+          return;
+        }
+
+        // Batch fetch outcomes and campaign names
+        const callIds = calls.map((c) => c.id);
+        const campaignIds = [...new Set(calls.map((c) => c.campaign_id).filter(Boolean))];
+
+        const [{ data: outcomes }, { data: campaigns }] = await Promise.all([
+          supabase.from('call_outcomes').select('call_id, outcome').in('call_id', callIds),
+          campaignIds.length
+            ? supabase.from('campaigns').select('id, name').in('id', campaignIds)
+            : Promise.resolve({ data: [] }),
+        ]);
+
+        const outcomeMap = new Map((outcomes ?? []).map((o) => [o.call_id, o.outcome]));
+        const campaignMap = new Map((campaigns ?? []).map((c) => [c.id, c.name]));
+
+        setCustomerCalls(calls.map((c) => ({
+          id: c.id,
+          status: c.status,
+          duration_seconds: c.duration_seconds,
+          created_at: c.created_at,
+          outcome: outcomeMap.get(c.id) ?? null,
+          employeeName: c.campaign_id ? (campaignMap.get(c.campaign_id) ?? null) : null,
+        })));
+      } finally {
+        setCallsLoading(false);
+      }
+    };
+
     fetchCustomerActivities();
+    fetchCustomerCalls();
   }, [selected?.uuid]);
 
   useEffect(() => {
@@ -540,9 +598,7 @@ export default function CustomersScreen() {
 
   if (selected) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="dark-content" />
-
+      <AppShell scrollable={false}>
         <ScrollView
           contentContainerStyle={styles.profilePage}
           showsVerticalScrollIndicator={false}
@@ -680,6 +736,63 @@ export default function CustomersScreen() {
               </Pressable>
             </View>
           )}
+
+          {/* ── CALL HISTORY ─────────────────────────────────── */}
+          <View style={styles.callHistoryCard}>
+            <View style={styles.callHistoryHeader}>
+              <Text style={styles.cardTitle}>Call history</Text>
+              <Text style={styles.callHistoryCount}>
+                {callsLoading ? '…' : `${customerCalls.length} call${customerCalls.length !== 1 ? 's' : ''}`}
+              </Text>
+            </View>
+            {callsLoading ? (
+              <Text style={styles.timelineEmpty}>Loading calls…</Text>
+            ) : customerCalls.length === 0 ? (
+              <Text style={styles.timelineEmpty}>No calls recorded for this customer yet.</Text>
+            ) : (
+              customerCalls.map((call) => {
+                const isCompleted = call.status === 'completed';
+                const isFailed = call.status === 'failed';
+                const dotColor = isFailed ? Colors.attention : isCompleted ? Colors.positive : Colors.neutral;
+                const dur = call.duration_seconds
+                  ? (() => {
+                      const m = Math.floor(call.duration_seconds / 60);
+                      const s = call.duration_seconds % 60;
+                      return m > 0 ? `${m}m ${s}s` : `${s}s`;
+                    })()
+                  : null;
+                return (
+                  <Pressable
+                    key={call.id}
+                    style={({ pressed }) => [styles.callHistoryRow, pressed && styles.pressed]}
+                    onPress={() => router.push({ pathname: '/call-detail' as any, params: { callId: call.id } })}
+                    accessibilityLabel={`View call report`}
+                  >
+                    <View style={[styles.callHistoryDot, { backgroundColor: dotColor }]} />
+                    <View style={styles.callHistoryBody}>
+                      <View style={styles.callHistoryTop}>
+                        <Text style={styles.callHistoryStatus}>
+                          {call.outcome
+                            ? call.outcome.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                            : call.status.charAt(0).toUpperCase() + call.status.slice(1)}
+                        </Text>
+                        {dur && <Text style={styles.callHistoryDuration}>{dur}</Text>}
+                      </View>
+                      <View style={styles.callHistoryMeta}>
+                        {call.employeeName && (
+                          <Text style={styles.callHistoryEmployee}>◉ {call.employeeName}</Text>
+                        )}
+                        <Text style={styles.callHistoryDate}>
+                          {new Date(call.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.callHistoryChevron}>›</Text>
+                  </Pressable>
+                );
+              })
+            )}
+          </View>
 
           <View style={styles.timelineCard}>
             <View style={styles.timelineHeader}>
@@ -820,117 +933,12 @@ export default function CustomersScreen() {
             </View>
           </Modal>
         </ScrollView>
-      </SafeAreaView>
+      </AppShell>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" />
-
-      <View style={styles.app}>
-        <View style={styles.sidebar}>
-          <View>
-            <Pressable
-              onPress={() => goTo('/')}
-              style={({ pressed }) => [
-                styles.brandRow,
-                pressed && styles.pressed,
-              ]}
-            >
-              <View style={styles.brandMark}>
-                <Text style={styles.brandMarkText}>S</Text>
-              </View>
-
-              <View>
-                <Text style={styles.brand}>SERVEXA</Text>
-                <Text style={styles.brandSmall}>
-                  CUSTOMER OPERATIONS
-                </Text>
-              </View>
-            </Pressable>
-
-            <Text style={styles.workspaceLabel}>WORKSPACE</Text>
-
-            <View style={styles.workspaceMini}>
-              <View style={styles.companyAvatar}>
-                <Text style={styles.companyAvatarText}>LG</Text>
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <Text style={styles.companyName}>Lekki Gardens</Text>
-                <Text style={styles.companyRole}>Customer Care</Text>
-              </View>
-            </View>
-
-            <View style={styles.nav}>
-              {nav.map(([icon, label, path]) => {
-                const active = label === 'Customers';
-
-                return (
-                  <Pressable
-                    key={label}
-                    onPress={() => goTo(path)}
-                    style={({ pressed }) => [
-                      styles.navItem,
-                      active && styles.navItemActive,
-                      pressed && styles.navItemPressed,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.navIcon,
-                        active && styles.navIconActive,
-                      ]}
-                    >
-                      {icon}
-                    </Text>
-
-                    <Text
-                      style={[
-                        styles.navText,
-                        active && styles.navTextActive,
-                      ]}
-                    >
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          <View style={styles.sidebarBottom}>
-            <View style={styles.planCard}>
-              <Text style={styles.planEyebrow}>CURRENT PLAN</Text>
-              <Text style={styles.planTitle}>Growth</Text>
-              <Text style={styles.planText}>
-                Usage is available in Settings
-              </Text>
-
-              <View style={styles.progressTrack}>
-                <View style={styles.progressFill} />
-              </View>
-
-              <Pressable>
-                <Text style={styles.upgradeText}>Manage plan →</Text>
-              </Pressable>
-            </View>
-
-            <Text style={styles.version}>
-              SERVEXA v0.1
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.main}>
-          <ScrollView
-            contentContainerStyle={[
-              styles.content,
-              isWide && styles.contentWide,
-            ]}
-            showsVerticalScrollIndicator={false}
-          >
+    <AppShell>
             <View style={styles.header}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.eyebrow}>CUSTOMER CARE</Text>
@@ -1036,33 +1044,15 @@ export default function CustomersScreen() {
             )}
 
           <View style={styles.table}>
+            {!isMobile && (
               <View style={styles.tableHeader}>
-                <Text
-                  style={[styles.tableHeaderText, { flex: 2.1 }]}
-                >
-                  CUSTOMER
-                </Text>
-
-                <Text
-                  style={[styles.tableHeaderText, { flex: 1.4 }]}
-                >
-                  REASON
-                </Text>
-
-                <Text
-                  style={[styles.tableHeaderText, { flex: 1.1 }]}
-                >
-                  NEXT ACTION
-                </Text>
-
-                <Text
-                  style={[styles.tableHeaderText, { flex: 0.9 }]}
-                >
-                  STATUS
-                </Text>
-
+                <Text style={[styles.tableHeaderText, { flex: 2.1 }]}>CUSTOMER</Text>
+                <Text style={[styles.tableHeaderText, { flex: 1.4 }]}>REASON</Text>
+                <Text style={[styles.tableHeaderText, { flex: 1.1 }]}>NEXT ACTION</Text>
+                <Text style={[styles.tableHeaderText, { flex: 0.9 }]}>STATUS</Text>
                 <Text style={{ width: 28 }} />
               </View>
+            )}
 
               {loading ? (
                 <View style={styles.loadingContainer}>
@@ -1072,7 +1062,47 @@ export default function CustomersScreen() {
                 <View style={styles.emptyContainer}>
                   <Text style={styles.emptyText}>No customers found. Create one to get started.</Text>
                 </View>
+              ) : isMobile ? (
+                // Mobile: card list
+                filteredCustomers.map((customer) => (
+                  <Pressable
+                    key={customer.id}
+                    onPress={() => setSelected(customer)}
+                    style={({ pressed }) => [
+                      styles.mobileCustomerCard,
+                      pressed && styles.tableRowPressed,
+                    ]}
+                  >
+                    <View style={styles.customerAvatar}>
+                      <Text style={styles.customerAvatarText}>{customer.initials}</Text>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.customerName} numberOfLines={1}>{customer.name}</Text>
+                      <Text style={styles.customerPhone} numberOfLines={1}>{customer.phone}</Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.statusPill,
+                        customer.status === 'Attention' && styles.statusAttention,
+                        customer.status === 'Follow-up' && styles.statusFollow,
+                        customer.status === 'Resolved' && styles.statusResolved,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusPillText,
+                          customer.status === 'Attention' && styles.statusAttentionText,
+                          customer.status === 'Resolved' && styles.statusResolvedText,
+                        ]}
+                      >
+                        {customer.status}
+                      </Text>
+                    </View>
+                    <Text style={styles.rowArrow}>›</Text>
+                  </Pressable>
+                ))
               ) : (
+                // Desktop: table rows
                 filteredCustomers.map((customer) => (
                 <Pressable
                   key={customer.id}
@@ -1082,327 +1112,68 @@ export default function CustomersScreen() {
                     pressed && styles.tableRowPressed,
                   ]}
                 >
-                  <View
-                    style={[
-                      styles.customerCell,
-                      { flex: 2.1 },
-                    ]}
-                  >
+                  <View style={[styles.customerCell, { flex: 2.1 }]}>
                     <View style={styles.customerAvatar}>
-                      <Text style={styles.customerAvatarText}>
-                        {customer.initials}
-                      </Text>
+                      <Text style={styles.customerAvatarText}>{customer.initials}</Text>
                     </View>
-
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.customerName}>
-                        {customer.name}
-                      </Text>
-
-                      <Text style={styles.customerPhone}>
-                        {customer.phone}
-                      </Text>
+                      <Text style={styles.customerName}>{customer.name}</Text>
+                      <Text style={styles.customerPhone}>{customer.phone}</Text>
                     </View>
                   </View>
-
                   <View style={{ flex: 1.4 }}>
-                    <Text style={styles.cellPrimary}>
-                      {customer.reason}
-                    </Text>
-                    <Text style={styles.cellSecondary}>
-                      {customer.amount}
-                    </Text>
+                    <Text style={styles.cellPrimary}>{customer.reason}</Text>
+                    <Text style={styles.cellSecondary}>{customer.amount}</Text>
                   </View>
-
                   <View style={{ flex: 1.1 }}>
-                    <Text style={styles.cellPrimary}>
-                      {customer.nextAction}
-                    </Text>
-                    <Text style={styles.cellSecondary}>
-                      Last contact {customer.lastContact}
-                    </Text>
+                    <Text style={styles.cellPrimary}>{customer.nextAction}</Text>
+                    <Text style={styles.cellSecondary}>Last contact {customer.lastContact}</Text>
                   </View>
-
                   <View style={{ flex: 0.9 }}>
                     <View
                       style={[
                         styles.statusPill,
-                        customer.status === 'Attention' &&
-                          styles.statusAttention,
-                        customer.status === 'Follow-up' &&
-                          styles.statusFollow,
-                        customer.status === 'Resolved' &&
-                          styles.statusResolved,
+                        customer.status === 'Attention' && styles.statusAttention,
+                        customer.status === 'Follow-up' && styles.statusFollow,
+                        customer.status === 'Resolved' && styles.statusResolved,
                       ]}
                     >
                       <View
                         style={[
                           styles.pillDot,
-                          customer.status === 'Attention' &&
-                            styles.pillDotAttention,
-                          customer.status === 'Resolved' &&
-                            styles.pillDotResolved,
+                          customer.status === 'Attention' && styles.pillDotAttention,
+                          customer.status === 'Resolved' && styles.pillDotResolved,
                         ]}
                       />
-
                       <Text
                         style={[
                           styles.statusPillText,
-                          customer.status === 'Attention' &&
-                            styles.statusAttentionText,
-                          customer.status === 'Resolved' &&
-                            styles.statusResolvedText,
+                          customer.status === 'Attention' && styles.statusAttentionText,
+                          customer.status === 'Resolved' && styles.statusResolvedText,
                         ]}
                       >
                         {customer.status}
                       </Text>
                     </View>
                   </View>
-
                   <Text style={styles.rowArrow}>›</Text>
                 </Pressable>
               ))
               )}
             </View>
-          </ScrollView>
-        </View>
-      </View>
-
       {renderAddCustomerModal()}
-    </SafeAreaView>
+    </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#F6F7F9',
-  },
-
-  app: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: '#F6F7F9',
-  },
-
-  sidebar: {
-    width: 260,
-    backgroundColor: '#FFFFFF',
-    borderRightWidth: 1,
-    borderRightColor: '#E7E9ED',
-    paddingHorizontal: 20,
-    paddingTop: 28,
-    paddingBottom: 20,
-    justifyContent: 'space-between',
-  },
-
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 6,
-  },
-
-  brandMark: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#172A3A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  brandMarkText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '800',
-  },
-
-  brand: {
-    color: '#172A3A',
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 1.1,
-  },
-
-  brandSmall: {
-    color: '#9AA1A9',
-    fontSize: 7,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    marginTop: 2,
-  },
-
-  workspaceLabel: {
-    marginTop: 40,
-    marginBottom: 10,
-    paddingHorizontal: 6,
-    color: '#98A0AA',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-  },
-
-  workspaceMini: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#E7E9ED',
-    borderRadius: 14,
-  },
-
-  companyAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#EAF4F5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  companyAvatarText: {
-    color: '#137A82',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-
-  companyName: {
-    color: '#20252C',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  companyRole: {
-    color: '#8C949E',
-    fontSize: 10,
-    marginTop: 2,
-  },
-
-  nav: {
-    marginTop: 28,
-    gap: 5,
-  },
-
-  navItem: {
-    height: 46,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-
-  navItemPressed: {
-    opacity: 0.7,
-  },
-
-  navItemActive: {
-    backgroundColor: '#EEF4F5',
-  },
-
-  navIcon: {
-    width: 20,
-    color: '#89929D',
-    fontSize: 18,
-    textAlign: 'center',
-  },
-
-  navIconActive: {
-    color: '#137A82',
-  },
-
-  navText: {
-    color: '#6E7782',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-
-  navTextActive: {
-    color: '#137A82',
-    fontWeight: '800',
-  },
-
-  sidebarBottom: {
-    gap: 18,
-  },
-
-  planCard: {
-    backgroundColor: '#F5F7F8',
-    borderRadius: 16,
-    padding: 15,
-  },
-
-  planEyebrow: {
-    color: '#8B949E',
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-
-  planTitle: {
-    color: '#1F2730',
-    fontSize: 16,
-    fontWeight: '800',
-    marginTop: 4,
-  },
-
-  planText: {
-    color: '#7E8791',
-    fontSize: 10,
-    marginTop: 8,
-  },
-
-  progressTrack: {
-    height: 5,
-    backgroundColor: '#DDE3E5',
-    borderRadius: 10,
-    marginTop: 9,
-    overflow: 'hidden',
-  },
-
-  progressFill: {
-    width: '74%',
-    height: '100%',
-    backgroundColor: '#137A82',
-    borderRadius: 10,
-  },
-
-  upgradeText: {
-    color: '#137A82',
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 11,
-  },
-
-  version: {
-    color: '#B0B6BD',
-    fontSize: 9,
-    paddingHorizontal: 4,
-  },
-
-  main: {
-    flex: 1,
-  },
-
-  content: {
-    padding: 26,
-    paddingBottom: 50,
-  },
-
-  contentWide: {
-    maxWidth: 1380,
-    width: '100%',
-    alignSelf: 'center',
-  },
-
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    flexWrap: 'wrap',
     marginBottom: 24,
-    gap: 18,
+    gap: 12,
   },
 
   eyebrow: {
@@ -1616,6 +1387,16 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
 
+  mobileCustomerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EDE9E2',
+  },
+
   customerCell: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1761,7 +1542,7 @@ const styles = StyleSheet.create({
   },
 
   profilePage: {
-    padding: 26,
+    padding: 16,
     paddingBottom: 60,
   },
 
@@ -1789,10 +1570,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E7E9ED',
     borderRadius: 20,
-    padding: 22,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 15,
+    flexWrap: 'wrap',
+    gap: 10,
   },
 
   profileAvatar: {
@@ -1899,17 +1681,19 @@ const styles = StyleSheet.create({
 
   profileGrid: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 10,
   },
 
   profileCard: {
     flex: 1,
+    minWidth: 120,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E7E9ED',
     borderRadius: 17,
-    padding: 18,
+    padding: 14,
   },
 
   cardEyebrow: {
@@ -2086,6 +1870,75 @@ const styles = StyleSheet.create({
     color: '#8E969F',
     fontSize: 10,
     paddingVertical: 18,
+  },
+
+  // Call history section
+  callHistoryCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    padding: 16,
+    marginBottom: 14,
+  },
+  callHistoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  callHistoryCount: {
+    color: Colors.inkFaint,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  callHistoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    gap: 10,
+  },
+  callHistoryDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    flexShrink: 0,
+  },
+  callHistoryBody: { flex: 1 },
+  callHistoryTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  callHistoryStatus: {
+    color: Colors.ink,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  callHistoryDuration: {
+    color: Colors.inkFaint,
+    fontSize: 11,
+  },
+  callHistoryMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  callHistoryEmployee: {
+    color: Colors.accent,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  callHistoryDate: {
+    color: Colors.inkFaint,
+    fontSize: 10,
+  },
+  callHistoryChevron: {
+    color: Colors.inkFaint,
+    fontSize: 18,
   },
 
   modalOverlay: {

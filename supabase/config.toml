@@ -419,3 +419,8 @@ verify_jwt = false
 
 [functions.sync-call-status]
 verify_jwt = false
+
+# External API for integrations (e.g. VEYRA).
+# JWT is not used — authentication is via the api_keys table (Bearer token).
+[functions.servexa-api]
+verify_jwt = false

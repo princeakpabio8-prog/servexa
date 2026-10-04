@@ -117,7 +117,7 @@ serve(async (req: Request) => {
     if (updateError) throw updateError;
 
     const { data: existingOutcome } = await supabase
-      .from("example-provider-call-id")
+      .from("call_outcomes")
       .select("id")
       .eq("call_id", servexaCallId)
       .maybeSingle();
@@ -130,7 +130,7 @@ serve(async (req: Request) => {
     const escalationReason = structuredResult?.escalation_reason;
 
     if (!existingOutcome) {
-      const { error: outcomeError } = await supabase.from("example-provider-call-id").insert({
+      const { error: outcomeError } = await supabase.from("call_outcomes").insert({
         call_id: servexaCallId,
         outcome,
         summary,
@@ -146,7 +146,7 @@ serve(async (req: Request) => {
       owner_id: callRecord.owner_id,
       customer_id: callRecord.customer_id,
       call_id: servexaCallId,
-      activity_type: "example-provider-call-id",
+      activity_type: "call_outcome",
       title: `Call ${data.status === "failed" ? "failed" : "completed"} - ${outcome}`,
       description: summary ?? "Call processed",
       metadata: {

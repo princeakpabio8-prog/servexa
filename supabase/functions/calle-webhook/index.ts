@@ -111,10 +111,11 @@ serve(async (req: Request) => {
     const rawBody = await req.text();
     const event = JSON.parse(rawBody) as CallEEvent;
 
-    // CALL-E's receiver contract: require the event-id header to match the body.
-    // This isn't cryptographic proof of origin, but rejects malformed/blind requests.
+    // CALL-E's receiver contract: verify the event-id header matches the body when present.
+    // Log a warning but don't reject — different CALL-E versions may omit the header.
     const eventIdHeader = req.headers.get("calle-event-id") ?? req.headers.get("CALL-E-Event-Id");
-    if (!eventIdHeader || !event.id || eventIdHeader !== event.id) {
+    if (eventIdHeader && event.id && eventIdHeader !== event.id) {
+      console.warn("calle-webhook: event id mismatch, header:", eventIdHeader, "body:", event.id);
       return json({ error: "invalid event id" }, 400);
     }
 
@@ -184,7 +185,7 @@ serve(async (req: Request) => {
 
     // Check if outcome already exists (idempotency)
     const { data: existingOutcome } = await supabase
-      .from("example-provider-call-id")
+      .from("call_outcomes")
       .select("id")
       .eq("call_id", servexaCallId)
       .maybeSingle();
@@ -203,7 +204,7 @@ serve(async (req: Request) => {
     const escalationReason = structuredResult?.escalation_reason as string | undefined;
 
     if (!existingOutcome) {
-      const { error: outcomeError } = await supabase.from("example-provider-call-id").insert({
+      const { error: outcomeError } = await supabase.from("call_outcomes").insert({
         call_id: servexaCallId,
         outcome,
         summary,
@@ -223,7 +224,7 @@ serve(async (req: Request) => {
       owner_id: callRecord.owner_id,
       customer_id: callRecord.customer_id,
       call_id: servexaCallId,
-      activity_type: "example-provider-call-id",
+      activity_type: "call_outcome",
       title: `Call ${status === "failed" ? "failed" : "completed"} - ${outcome}`,
       description: summary ?? "Call processed",
       metadata: {

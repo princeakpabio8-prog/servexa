@@ -1,5 +1,5 @@
 -- Repair migration: the initial schema migration only partially applied on
--- the remote database. Tables campaigns, example-provider-call-id, follow_ups, and
+-- the remote database. Tables campaigns, call_outcomes, follow_ups, and
 -- activities were missing entirely, and RLS was enabled on customers/calls
 -- with zero policies (silently denying all reads/writes). Recreate
 -- everything idempotently.
@@ -20,7 +20,7 @@ create table if not exists public.campaigns (
 );
 
 -- CALL OUTCOMES
-create table if not exists public.example-provider-call-id (
+create table if not exists public.call_outcomes (
   id uuid primary key default gen_random_uuid(),
   call_id uuid not null unique references public.calls(id) on delete cascade,
   outcome text not null,
@@ -88,7 +88,7 @@ create index if not exists activities_created_at_idx on public.activities(create
 alter table public.customers enable row level security;
 alter table public.campaigns enable row level security;
 alter table public.calls enable row level security;
-alter table public.example-provider-call-id enable row level security;
+alter table public.call_outcomes enable row level security;
 alter table public.follow_ups enable row level security;
 alter table public.activities enable row level security;
 
@@ -131,27 +131,27 @@ create policy "Users can create their own calls"
 create policy "Users can update their own calls"
   on public.calls for update using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
 
-drop policy if exists "Users can view outcomes for their calls" on public.example-provider-call-id;
-drop policy if exists "Users can create outcomes for their calls" on public.example-provider-call-id;
-drop policy if exists "Users can update outcomes for their calls" on public.example-provider-call-id;
+drop policy if exists "Users can view outcomes for their calls" on public.call_outcomes;
+drop policy if exists "Users can create outcomes for their calls" on public.call_outcomes;
+drop policy if exists "Users can update outcomes for their calls" on public.call_outcomes;
 
 create policy "Users can view outcomes for their calls"
-  on public.example-provider-call-id for select
+  on public.call_outcomes for select
   using (exists (
     select 1 from public.calls
-    where calls.id = example-provider-call-id.call_id and calls.owner_id = auth.uid()
+    where calls.id = call_outcomes.call_id and calls.owner_id = auth.uid()
   ));
 create policy "Users can create outcomes for their calls"
-  on public.example-provider-call-id for insert
+  on public.call_outcomes for insert
   with check (exists (
     select 1 from public.calls
-    where calls.id = example-provider-call-id.call_id and calls.owner_id = auth.uid()
+    where calls.id = call_outcomes.call_id and calls.owner_id = auth.uid()
   ));
 create policy "Users can update outcomes for their calls"
-  on public.example-provider-call-id for update
+  on public.call_outcomes for update
   using (exists (
     select 1 from public.calls
-    where calls.id = example-provider-call-id.call_id and calls.owner_id = auth.uid()
+    where calls.id = call_outcomes.call_id and calls.owner_id = auth.uid()
   ));
 
 drop policy if exists "Users can view their own follow ups" on public.follow_ups;
@@ -202,9 +202,9 @@ create trigger calls_set_updated_at
 before update on public.calls
 for each row execute function public.set_updated_at();
 
-drop trigger if exists example-provider-call-id on public.example-provider-call-id;
-create trigger example-provider-call-id
-before update on public.example-provider-call-id
+drop trigger if exists call_outcomes_set_updated_at on public.call_outcomes;
+create trigger call_outcomes_set_updated_at
+before update on public.call_outcomes
 for each row execute function public.set_updated_at();
 
 drop trigger if exists follow_ups_set_updated_at on public.follow_ups;

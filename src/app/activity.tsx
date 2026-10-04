@@ -1,16 +1,17 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
     Pressable,
-    SafeAreaView,
     ScrollView,
-    StatusBar,
     StyleSheet,
     Text,
     View,
     useWindowDimensions,
 } from 'react-native';
+import AppShell from '../components/app-shell';
+import AlertBanner from '../components/alert-banner';
+import { Colors, Radius } from '../constants/theme';
 import { ensureSession, supabase } from '../lib/supabase';
 
 type Activity = {
@@ -62,8 +63,9 @@ export default function ActivityScreen() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [activeFilter, setActiveFilter] = useState(filters[0]);
   const { width } = useWindowDimensions();
-  const isWide = width >= 1000;
+  const isMobile = width < 768;
 
   useEffect(() => {
     fetchActivities();
@@ -138,291 +140,317 @@ export default function ActivityScreen() {
     }
   };
 
-  const nav = [
-    ['⌂', 'Overview', '/'],
-    ['◎', 'Customers', '/customers'],
-    ['◫', 'Campaigns', '/campaigns'],
-    ['◷', 'Activity', '/activity'],
-    ['⚙', 'Settings', '/settings'],
-  ];
+  // ── Grouping helpers ──────────────────────────────────────────────────────
+  const { attentionItems, filteredActivities, groupedActivities } = useMemo(() => {
+    // Filter by tab
+    const filtered = activities.filter((a) => {
+      const t = getActivityType(a.metadata);
+      if (activeFilter === 'All activity') return true;
+      if (activeFilter === 'Calls') return a.activity_type === 'call' || a.activity_type === 'call_completed';
+      if (activeFilter === 'Follow-ups') return t === 'follow' || a.metadata?.follow_up_required;
+      if (activeFilter === 'Attention') return t === 'attention';
+      if (activeFilter === 'Resolved') return t === 'resolved';
+      return true;
+    });
+
+    // Attention items always surfaced at top
+    const attention = filtered.filter((a) => getActivityType(a.metadata) === 'attention');
+
+    // Time grouping
+    const now = new Date();
+    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+    const yesterdayStart = new Date(todayStart); yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+    const weekStart = new Date(todayStart); weekStart.setDate(weekStart.getDate() - 7);
+
+    const groups: { label: string; items: Activity[] }[] = [];
+    const todayItems = filtered.filter((a) => new Date(a.created_at) >= todayStart);
+    const yesterdayItems = filtered.filter((a) => {
+      const d = new Date(a.created_at);
+      return d >= yesterdayStart && d < todayStart;
+    });
+    const thisWeekItems = filtered.filter((a) => {
+      const d = new Date(a.created_at);
+      return d >= weekStart && d < yesterdayStart;
+    });
+    const olderItems = filtered.filter((a) => new Date(a.created_at) < weekStart);
+
+    if (todayItems.length > 0) groups.push({ label: 'Today', items: todayItems });
+    if (yesterdayItems.length > 0) groups.push({ label: 'Yesterday', items: yesterdayItems });
+    if (thisWeekItems.length > 0) groups.push({ label: 'This week', items: thisWeekItems });
+    if (olderItems.length > 0) groups.push({ label: 'Earlier', items: olderItems });
+
+    return { attentionItems: attention, filteredActivities: filtered, groupedActivities: groups };
+  }, [activities, activeFilter]);
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" />
-
-      <View style={styles.app}>
-        <View style={styles.sidebar}>
-          <View>
-            <Pressable style={styles.brandRow} onPress={() => router.push('/')}>
-              <View style={styles.brandMark}>
-                <Text style={styles.brandMarkText}>S</Text>
-              </View>
-              <View>
-                <Text style={styles.brand}>SERVEXA</Text>
-                <Text style={styles.brandSmall}>CUSTOMER OPERATIONS</Text>
-              </View>
-            </Pressable>
-
-            <Text style={styles.workspaceLabel}>WORKSPACE</Text>
-
-            <View style={styles.workspace}>
-              <View style={styles.companyAvatar}>
-                <Text style={styles.companyAvatarText}>LG</Text>
-              </View>
-
-              <View style={styles.workspaceText}>
-                <Text style={styles.companyName}>Lekki Gardens</Text>
-                <Text style={styles.companyRole}>Customer Care</Text>
-              </View>
-
-              <Text style={styles.chevron}>⌄</Text>
-            </View>
-
-            <View style={styles.nav}>
-              {nav.map(([icon, label, route]) => {
-                const active = label === 'Activity';
-
-                return (
-                  <Pressable
-                    key={label}
-                    onPress={() => router.push(route as any)}
-                    style={({ pressed }) => [
-                      styles.navItem,
-                      active && styles.navItemActive,
-                      pressed && styles.navPressed,
-                    ]}
-                  >
-                    <Text style={[styles.navIcon, active && styles.navIconActive]}>
-                      {icon}
-                    </Text>
-                    <Text style={[styles.navText, active && styles.navTextActive]}>
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          <View>
-            <View style={styles.planCard}>
-              <View style={styles.planHeader}>
-                <View>
-                  <Text style={styles.planEyebrow}>CURRENT PLAN</Text>
-                  <Text style={styles.planTitle}>Growth</Text>
-                </View>
-                <View style={styles.planDot} />
-              </View>
-
-              <Text style={styles.planText}>Usage is available in Settings</Text>
-
-              <View style={styles.track}>
-                <View style={styles.fill} />
-              </View>
-
-              <Text style={styles.manage}>Manage plan →</Text>
-            </View>
-
-            <Text style={styles.version}>SERVEXA v0.1</Text>
-          </View>
-        </View>
-
-        <View style={styles.main}>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={[styles.content, isWide && styles.contentWide]}
-          >
-            <View style={styles.header}>
+    <AppShell>
+            {/* ── PAGE HEADER ─────────────────────────────────────── */}
+            <View style={[styles.header, isMobile && styles.headerMobile]}>
               <View style={styles.headerCopy}>
                 <Text style={styles.eyebrow}>CUSTOMER OPERATIONS</Text>
                 <Text style={styles.title}>Activity</Text>
-                <Text style={styles.subtitle}>
-                  See what SERVEXA handled, what customers said, and what your team needs to do next.
-                </Text>
+                {!isMobile && (
+                  <Text style={styles.subtitle}>
+                    See what SERVEXA handled, what customers said, and what your team needs to do next.
+                  </Text>
+                )}
               </View>
 
-              <View style={styles.headerActions}>
+              <View style={[styles.headerActions, isMobile && styles.headerActionsMobile]}>
                 <Pressable
                   onPress={syncPendingCalls}
                   disabled={syncing}
                   style={({ pressed }) => [styles.refreshButton, pressed && styles.pressed]}
                 >
                   <Text style={styles.refreshButtonText}>
-                    {syncing ? 'Refreshing…' : '↻ Refresh status'}
+                    {syncing ? 'Refreshing…' : '↻ Refresh'}
                   </Text>
                 </Pressable>
 
-                <View style={styles.livePill}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.liveText}>CALL-E LIVE</Text>
-                </View>
+                {!isMobile && (
+                  <View style={styles.livePill}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.liveText}>CALL-E LIVE</Text>
+                  </View>
+                )}
               </View>
             </View>
 
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryMain}>
-                <Text style={styles.summaryEyebrow}>RECENT AUTOMATED ACTIVITY</Text>
-                <Text style={styles.summaryValue}>{activities.length}</Text>
-                <Text style={styles.summaryDescription}>
-                  customer interactions loaded
-                </Text>
+            {/* ── SUMMARY STATS ──────────────────────────────────── */}
+            <View style={[styles.summaryCard, isMobile && styles.summaryCardMobile]}>
+              <View style={[styles.summaryStat, isMobile && styles.summaryStatHalf]}>
+                <Text style={styles.summaryStatValue}>{activities.length}</Text>
+                <Text style={styles.summaryStatLabel}>Interactions</Text>
               </View>
 
-              <View style={styles.summaryDivider} />
+              {!isMobile && <View style={styles.summaryStatDivider} />}
 
-              <View style={styles.summaryStat}>
+              <View style={[styles.summaryStat, isMobile && styles.summaryStatHalf]}>
                 <Text style={styles.summaryStatValue}>
                   {activities.length ? `${Math.round((activities.filter((item) => item.metadata?.outcome === 'resolved').length / activities.length) * 100)}%` : '—'}
                 </Text>
-                <Text style={styles.summaryStatLabel}>Resolved automatically</Text>
+                <Text style={styles.summaryStatLabel}>Resolved auto</Text>
               </View>
 
-              <View style={styles.summaryStat}>
+              {!isMobile && <View style={styles.summaryStatDivider} />}
+
+              <View style={[styles.summaryStat, isMobile && styles.summaryStatHalf]}>
                 <Text style={styles.summaryStatValue}>
                   {activities.filter((item) => item.metadata?.escalation_required).length}
                 </Text>
-                <Text style={styles.summaryStatLabel}>Need human attention</Text>
+                <Text style={styles.summaryStatLabel}>Need attention</Text>
               </View>
 
-              <View style={styles.summaryStat}>
+              {!isMobile && <View style={styles.summaryStatDivider} />}
+
+              <View style={[styles.summaryStat, isMobile && styles.summaryStatHalf]}>
                 <Text style={styles.summaryStatValue}>
                   {activities.filter((item) => item.metadata?.follow_up_required).length}
                 </Text>
-                <Text style={styles.summaryStatLabel}>Follow-ups created</Text>
+                <Text style={styles.summaryStatLabel}>Follow-ups</Text>
               </View>
             </View>
 
+            {/* ── SECTION HEADER + FILTERS ───────────────────────── */}
             <View style={styles.sectionHeader}>
-              <View>
-                <Text style={styles.sectionTitle}>Recent activity</Text>
-                <Text style={styles.sectionSubtitle}>
-                  Every important customer interaction in one place
-                </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionTitle}>Activity</Text>
+                {!isMobile && (
+                  <Text style={styles.sectionSubtitle}>
+                    Every important customer interaction in one place
+                  </Text>
+                )}
               </View>
+            </View>
 
-              <View style={styles.filterRow}>
-                {filters.map((filter, index) => (
+            {/* Filter pills */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterRow}
+              style={styles.filterScroll}
+            >
+              {filters.map((filter) => {
+                const active = filter === activeFilter;
+                return (
                   <Pressable
                     key={filter}
-                    style={[
-                      styles.filter,
-                      index === 0 && styles.filterActive,
-                    ]}
+                    onPress={() => setActiveFilter(filter)}
+                    style={[styles.filter, active && styles.filterActive]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`Filter by ${filter}`}
                   >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        index === 0 && styles.filterTextActive,
-                      ]}
-                    >
+                    <Text style={[styles.filterText, active && styles.filterTextActive]}>
                       {filter}
                     </Text>
                   </Pressable>
-                ))}
-              </View>
-            </View>
+                );
+              })}
+            </ScrollView>
 
-            <View style={styles.activityCard}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableHeading, styles.customerColumn]}>CUSTOMER</Text>
-                <Text style={[styles.tableHeading, styles.actionColumn]}>INTERACTION</Text>
-                <Text style={[styles.tableHeading, styles.outcomeColumn]}>OUTCOME</Text>
-                <Text style={[styles.tableHeading, styles.nextColumn]}>NEXT ACTION</Text>
-                <Text style={styles.tableHeading}>TIME</Text>
-              </View>
-
-              {loading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#0066cc" />
+            {/* ── NEEDS ATTENTION — surfaced at top ─────────────── */}
+            {!loading && attentionItems.length > 0 && activeFilter === 'All activity' && (
+              <View style={styles.attentionSection}>
+                <View style={styles.attentionSectionHeader}>
+                  <Text style={styles.attentionSectionTitle}>Needs Attention</Text>
+                  <View style={styles.attentionBadge}>
+                    <Text style={styles.attentionBadgeText}>{attentionItems.length}</Text>
+                  </View>
                 </View>
-              ) : activities.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No activities yet. Start making calls to see activity records here.</Text>
-                </View>
-              ) : (
-                activities.map((activity, index) => {
-                  const activityType = getActivityType(activity.metadata);
-                  const customerInitials = activity.customer_name ? getInitials(activity.customer_name) : 'XX';
-                  const outcome = activity.metadata?.outcome || 'unknown';
-                  const nextAction = activity.metadata?.next_action || 'Pending review';
-
-                  return (
-                    <Pressable
-                      key={activity.id}
-                      onPress={() =>
-                        activity.call_id
-                          ? router.push({ pathname: '/call-detail' as any, params: { callId: activity.call_id } })
+                {attentionItems.slice(0, 3).map((item) => (
+                  <View key={item.id} style={styles.attentionBannerWrap}>
+                    <AlertBanner
+                      type="escalation"
+                      title={item.customer_name || 'Customer'}
+                      subtitle={item.metadata?.escalation_reason || item.description || 'Needs review'}
+                      action="View"
+                      onAction={() =>
+                        item.call_id
+                          ? router.push({ pathname: '/call-detail' as any, params: { callId: item.call_id } })
                           : router.push('/customers' as any)
                       }
-                      style={({ pressed }) => [
-                        styles.event,
-                        index === activities.length - 1 && styles.eventLast,
-                        pressed && styles.pressed,
-                      ]}
-                    >
-                      <View style={styles.customerColumn}>
-                        <View style={styles.customerCell}>
-                          <View style={styles.personAvatar}>
-                            <Text style={styles.personAvatarText}>{customerInitials}</Text>
-                          </View>
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
 
-                          <View style={styles.customerInfo}>
-                            <Text style={styles.name}>{activity.customer_name || 'Unknown'}</Text>
-                            <Text style={styles.customerType}>Customer</Text>
-                          </View>
-                        </View>
+            {/* ── GROUPED ACTIVITY LIST ─────────────────────────── */}
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#0066cc" />
+              </View>
+            ) : filteredActivities.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No activities yet. Start making calls to see activity records here.</Text>
+              </View>
+            ) : (
+              groupedActivities.map((group) => (
+                <View key={group.label}>
+                  {/* Group label */}
+                  <View style={styles.groupHeader}>
+                    <Text style={styles.groupLabel}>{group.label}</Text>
+                    <View style={styles.groupLine} />
+                  </View>
+
+                  <View style={styles.activityCard}>
+                    {!isMobile && (
+                      <View style={styles.tableHeader}>
+                        <Text style={[styles.tableHeading, styles.customerColumn]}>CUSTOMER</Text>
+                        <Text style={[styles.tableHeading, styles.actionColumn]}>INTERACTION</Text>
+                        <Text style={[styles.tableHeading, styles.outcomeColumn]}>OUTCOME</Text>
+                        <Text style={[styles.tableHeading, styles.nextColumn]}>NEXT ACTION</Text>
+                        <Text style={styles.tableHeading}>TIME</Text>
                       </View>
+                    )}
 
-                      <View style={styles.actionColumn}>
-                        <Text style={styles.action}>{activity.title || activity.activity_type}</Text>
-                        <Text style={styles.agentLabel}>Handled by SERVEXA</Text>
-                      </View>
+                    {group.items.map((activity, index) => {
+                      const activityType = getActivityType(activity.metadata);
+                      const customerInitials = activity.customer_name ? getInitials(activity.customer_name) : 'XX';
+                      const outcome = activity.metadata?.outcome || 'unknown';
+                      const nextAction = activity.metadata?.next_action || 'Pending review';
 
-                      <View style={styles.outcomeColumn}>
-                        <View
-                          style={[
-                            styles.outcomeBadge,
-                            activityType === 'attention' && styles.outcomeAttention,
-                            activityType === 'resolved' && styles.outcomeResolved,
+                      if (isMobile) {
+                        return (
+                          <Pressable
+                            key={activity.id}
+                            onPress={() =>
+                              activity.call_id
+                                ? router.push({ pathname: '/call-detail' as any, params: { callId: activity.call_id } })
+                                : router.push('/customers' as any)
+                            }
+                            style={({ pressed }) => [styles.mobileActivityRow, pressed && styles.pressed]}
+                          >
+                            <View style={styles.personAvatar}>
+                              <Text style={styles.personAvatarText}>{customerInitials}</Text>
+                            </View>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text style={styles.name} numberOfLines={1}>{activity.customer_name || 'Unknown'}</Text>
+                              <Text style={styles.action} numberOfLines={1}>{activity.title || activity.activity_type}</Text>
+                            </View>
+                            <View style={[
+                              styles.outcomeBadge,
+                              activityType === 'attention' && styles.outcomeAttention,
+                              activityType === 'resolved' && styles.outcomeResolved,
+                            ]}>
+                              <Text style={[
+                                styles.outcomeText,
+                                activityType === 'attention' && styles.outcomeTextAttention,
+                                activityType === 'resolved' && styles.outcomeTextResolved,
+                              ]}>
+                                {activityType === 'attention' ? 'Attention' : activityType === 'resolved' ? 'Resolved' : 'Follow-up'}
+                              </Text>
+                            </View>
+                            <Text style={styles.time}>{formatTime(activity.created_at)}</Text>
+                          </Pressable>
+                        );
+                      }
+
+                      return (
+                        <Pressable
+                          key={activity.id}
+                          onPress={() =>
+                            activity.call_id
+                              ? router.push({ pathname: '/call-detail' as any, params: { callId: activity.call_id } })
+                              : router.push('/customers' as any)
+                          }
+                          style={({ pressed }) => [
+                            styles.event,
+                            index === group.items.length - 1 && styles.eventLast,
+                            pressed && styles.pressed,
                           ]}
                         >
-                          <View
-                            style={[
-                              styles.outcomeDot,
-                              activityType === 'attention' && styles.outcomeDotAttention,
-                              activityType === 'resolved' && styles.outcomeDotResolved,
-                            ]}
-                          />
-                          <Text
-                            style={[
-                              styles.outcomeText,
-                              activityType === 'attention' && styles.outcomeTextAttention,
-                              activityType === 'resolved' && styles.outcomeTextResolved,
-                            ]}
-                          >
-                            {activityType === 'attention'
-                              ? 'Attention'
-                              : activityType === 'resolved'
-                              ? 'Resolved'
-                              : 'Follow-up'}
-                          </Text>
-                        </View>
-                        <Text style={styles.result}>{activity.description || outcome}</Text>
-                      </View>
-
-                      <View style={styles.nextColumn}>
-                        <Text style={styles.nextAction}>{nextAction}</Text>
-                      </View>
-
-                      <View style={styles.timeColumn}>
-                        <Text style={styles.time}>{formatTime(activity.created_at)}</Text>
-                        <Text style={styles.arrow}>›</Text>
-                      </View>
-                    </Pressable>
-                  );
-                })
-              )}
-            </View>
+                          <View style={styles.customerColumn}>
+                            <View style={styles.customerCell}>
+                              <View style={styles.personAvatar}>
+                                <Text style={styles.personAvatarText}>{customerInitials}</Text>
+                              </View>
+                              <View style={styles.customerInfo}>
+                                <Text style={styles.name}>{activity.customer_name || 'Unknown'}</Text>
+                                <Text style={styles.customerType}>Customer</Text>
+                              </View>
+                            </View>
+                          </View>
+                          <View style={styles.actionColumn}>
+                            <Text style={styles.action}>{activity.title || activity.activity_type}</Text>
+                            <Text style={styles.agentLabel}>Handled by SERVEXA</Text>
+                          </View>
+                          <View style={styles.outcomeColumn}>
+                            <View style={[
+                              styles.outcomeBadge,
+                              activityType === 'attention' && styles.outcomeAttention,
+                              activityType === 'resolved' && styles.outcomeResolved,
+                            ]}>
+                              <View style={[
+                                styles.outcomeDot,
+                                activityType === 'attention' && styles.outcomeDotAttention,
+                                activityType === 'resolved' && styles.outcomeDotResolved,
+                              ]} />
+                              <Text style={[
+                                styles.outcomeText,
+                                activityType === 'attention' && styles.outcomeTextAttention,
+                                activityType === 'resolved' && styles.outcomeTextResolved,
+                              ]}>
+                                {activityType === 'attention' ? 'Attention' : activityType === 'resolved' ? 'Resolved' : 'Follow-up'}
+                              </Text>
+                            </View>
+                            <Text style={styles.result}>{activity.description || outcome}</Text>
+                          </View>
+                          <View style={styles.nextColumn}>
+                            <Text style={styles.nextAction}>{nextAction}</Text>
+                          </View>
+                          <View style={styles.timeColumn}>
+                            <Text style={styles.time}>{formatTime(activity.created_at)}</Text>
+                            <Text style={styles.arrow}>›</Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))
+            )}
 
             <View style={styles.callInsight}>
               <View style={styles.callIcon}>
@@ -444,148 +472,40 @@ export default function ActivityScreen() {
                 <Text style={styles.customersButtonText}>View customers →</Text>
               </Pressable>
             </View>
-          </ScrollView>
-        </View>
-      </View>
-    </SafeAreaView>
+    </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F4F6F8' },
-  app: { flex: 1, flexDirection: 'row' },
-
-  sidebar: {
-    width: 270,
-    backgroundColor: '#FFF',
-    borderRightWidth: 1,
-    borderRightColor: '#E5E8EC',
-    padding: 20,
-    paddingTop: 28,
-    paddingBottom: 20,
-    justifyContent: 'space-between',
-  },
-
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 11 },
-
-  brandMark: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#122735',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  brandMarkText: { color: '#FFF', fontSize: 19, fontWeight: '900' },
-  brand: { color: '#152532', fontSize: 17, fontWeight: '900', letterSpacing: 1 },
-  brandSmall: { color: '#9AA4AD', fontSize: 7, fontWeight: '800', letterSpacing: 1, marginTop: 2 },
-
-  workspaceLabel: {
-    marginTop: 38,
-    marginBottom: 10,
-    color: '#98A1AA',
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 1.3,
-  },
-
-  workspace: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: '#E5E8EC',
-    borderRadius: 15,
-    padding: 11,
-  },
-
-  workspaceText: { flex: 1 },
-
-  companyAvatar: {
-    width: 35,
-    height: 35,
-    borderRadius: 11,
-    backgroundColor: '#E6F3F3',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  companyAvatarText: { color: '#147983', fontSize: 10, fontWeight: '900' },
-  companyName: { color: '#202A33', fontSize: 12, fontWeight: '800' },
-  companyRole: { color: '#8B949D', fontSize: 9, marginTop: 2 },
-  chevron: { color: '#8C959E', fontSize: 17 },
-
-  nav: { marginTop: 27, gap: 5 },
-
-  navItem: {
-    minHeight: 46,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+  mobileActivityRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-
-  navPressed: { opacity: 0.65 },
-  navItemActive: { backgroundColor: '#EAF3F4' },
-  navIcon: { width: 20, color: '#89939D', fontSize: 17, textAlign: 'center' },
-  navIconActive: { color: '#147983' },
-  navText: { color: '#69747E', fontSize: 13, fontWeight: '600' },
-  navTextActive: { color: '#147983', fontWeight: '800' },
-
-  planCard: {
-    backgroundColor: '#F5F7F8',
-    borderWidth: 1,
-    borderColor: '#E9ECEF',
-    borderRadius: 17,
-    padding: 15,
-  },
-
-  planHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  planDot: { width: 7, height: 7, borderRadius: 7, backgroundColor: '#4EAC82', marginTop: 4 },
-  planEyebrow: { color: '#8A949D', fontSize: 8, fontWeight: '900', letterSpacing: 1 },
-  planTitle: { color: '#1D2831', fontSize: 17, fontWeight: '900', marginTop: 5 },
-  planText: { color: '#7E8891', fontSize: 9, marginTop: 7 },
-
-  track: {
-    height: 6,
-    backgroundColor: '#DCE3E6',
-    borderRadius: 10,
-    marginTop: 10,
-    overflow: 'hidden',
-  },
-
-  fill: { width: '74%', height: '100%', backgroundColor: '#147983' },
-  manage: { color: '#147983', fontSize: 9, fontWeight: '900', marginTop: 10 },
-  version: { color: '#B0B7BD', fontSize: 8, marginTop: 17 },
-
-  main: { flex: 1 },
-
-  content: {
-    padding: 28,
-    paddingBottom: 60,
-  },
-
-  contentWide: {
-    maxWidth: 1450,
-    width: '100%',
-    alignSelf: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EDE9E2',
   },
 
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginBottom: 24,
+    marginBottom: 20,
   },
 
-  headerCopy: { flex: 1 },
+  headerMobile: {
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+
+  headerCopy: { flex: 1, minWidth: 0 },
   eyebrow: { color: '#99A2AA', fontSize: 9, fontWeight: '900', letterSpacing: 1.3 },
-  title: { color: '#15232E', fontSize: 32, fontWeight: '900', marginTop: 5 },
+  title: { color: '#15232E', fontSize: 28, fontWeight: '900', marginTop: 4 },
   subtitle: { color: '#77828C', fontSize: 12, marginTop: 6, maxWidth: 720 },
 
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 },
+  headerActionsMobile: { flexShrink: 0 },
 
   refreshButton: {
     borderWidth: 1,
@@ -613,28 +533,36 @@ const styles = StyleSheet.create({
 
   summaryCard: {
     backgroundColor: '#112936',
-    borderRadius: 22,
-    padding: 24,
+    borderRadius: 20,
+    padding: 18,
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 150,
+    flexWrap: 'nowrap',
+    overflow: 'hidden',
   },
 
-  summaryMain: { flex: 1 },
-  summaryEyebrow: { color: '#91AEB2', fontSize: 8, fontWeight: '900', letterSpacing: 1 },
-  summaryValue: { color: '#FFF', fontSize: 42, fontWeight: '900', marginTop: 4 },
-  summaryDescription: { color: '#AFC0C7', fontSize: 10, marginTop: 2 },
+  summaryCardMobile: {
+    flexWrap: 'wrap',
+    padding: 16,
+    gap: 0,
+  },
 
-  summaryDivider: {
+  summaryStatFirst: {},
+  // On mobile: 2-column grid (two stats per row)
+  summaryStatHalf: { width: '50%', flex: 0, paddingVertical: 10, paddingHorizontal: 12 },
+
+  summaryStatDivider: {
     width: 1,
-    height: 64,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    marginHorizontal: 28,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    marginHorizontal: 14,
+    alignSelf: 'center',
   },
 
-  summaryStat: { minWidth: 125, paddingHorizontal: 12 },
-  summaryStatValue: { color: '#FFF', fontSize: 23, fontWeight: '900' },
-  summaryStatLabel: { color: '#91AEB2', fontSize: 8, lineHeight: 12, marginTop: 4 },
+  // On mobile the dividers are hidden via JSX (not rendered), stats use 50% width
+  summaryStat: { flex: 1, minWidth: 80, paddingHorizontal: 8, paddingVertical: 6 },
+  summaryStatValue: { color: '#FFF', fontSize: 22, fontWeight: '900' },
+  summaryStatLabel: { color: '#91AEB2', fontSize: 8, lineHeight: 12, marginTop: 3 },
 
   sectionHeader: {
     marginTop: 30,
@@ -644,11 +572,15 @@ const styles = StyleSheet.create({
   sectionTitle: { color: '#202A33', fontSize: 17, fontWeight: '900' },
   sectionSubtitle: { color: '#919AA3', fontSize: 10, marginTop: 3 },
 
+  filterScroll: {
+    marginBottom: 12,
+  },
+
   filterRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 6,
-    marginTop: 13,
+    paddingBottom: 4,
+    paddingHorizontal: 1,
   },
 
   filter: {
@@ -761,6 +693,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 17,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     alignItems: 'center',
   },
@@ -775,7 +708,7 @@ const styles = StyleSheet.create({
   },
 
   callIconText: { color: '#FFF', fontSize: 9, fontWeight: '900' },
-  insightCopy: { flex: 1 },
+  insightCopy: { flex: 1, minWidth: 160 },
   insightTitle: { color: '#155F66', fontSize: 10, fontWeight: '900' },
   insightText: { color: '#58787B', fontSize: 8, lineHeight: 13, marginTop: 3 },
 
@@ -808,5 +741,58 @@ const styles = StyleSheet.create({
     color: '#8B949D',
     fontSize: 12,
     textAlign: 'center',
+  },
+
+  // Group headers
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  groupLabel: {
+    color: Colors.inkMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    flexShrink: 0,
+  },
+  groupLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+
+  // Attention section
+  attentionSection: {
+    marginBottom: 6,
+  },
+  attentionSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  attentionSectionTitle: {
+    color: Colors.ink,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  attentionBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.attention,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+  attentionBadgeText: {
+    color: Colors.surface,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  attentionBannerWrap: {
+    marginBottom: 6,
   },
 });
