@@ -2,6 +2,7 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+    ActivityIndicator,
     Pressable,
     RefreshControl,
     ScrollView,
@@ -196,9 +197,10 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadDashboard = async () => {
+  const loadDashboard = async (signal?: { cancelled: boolean }) => {
     try {
       await ensureSession();
+      if (signal?.cancelled) return;
 
       // ── Fetch everything in parallel ──────────────────────────
       const [
@@ -362,14 +364,18 @@ export default function DashboardScreen() {
         },
       ]);
 
+      if (signal?.cancelled) return;
       setEmployees(employeeList);
       setAttention(attentionItems);
       setRecentCalls(recent);
     } catch (err) {
+      if (signal?.cancelled) return;
       console.error('[Dashboard] load error:', err);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!signal?.cancelled) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -378,7 +384,8 @@ export default function DashboardScreen() {
   useEffect(() => { loadDashboardRef.current = loadDashboard; });
 
   useEffect(() => {
-    loadDashboard();
+    const signal = { cancelled: false };
+    loadDashboard(signal);
 
     // ── Realtime: re-fetch dashboard when calls or activities change ──────
     // Two lightweight subscriptions scoped to INSERT/UPDATE only.
@@ -400,6 +407,7 @@ export default function DashboardScreen() {
       .subscribe();
 
     return () => {
+      signal.cancelled = true;
       if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(callsSub);
       supabase.removeChannel(activitiesSub);
@@ -424,6 +432,19 @@ export default function DashboardScreen() {
   const activeEmployeeCount = employees.filter((e) => e.status === 'active').length;
   // New workspace: no employees AND no calls yet
   const isNewWorkspace = !loading && employees.length === 0 && recentCalls.length === 0;
+
+  // Show a centred spinner while the first load is in flight.
+  // This prevents the blank-white screen that appears on mobile
+  // when navigating back to Overview before data has arrived.
+  if (loading && !refreshing) {
+    return (
+      <AppShell scrollable={false}>
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell scrollable={false}>
@@ -644,6 +665,11 @@ export default function DashboardScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   scroll: {
     flex: 1,
   },
@@ -655,6 +681,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   contentMobile: {
+    // Reset desktop centering constraints so content fills the viewport width
+    maxWidth: undefined,
+    alignSelf: 'stretch',
     padding: 16,
     paddingBottom: 100,
   },
