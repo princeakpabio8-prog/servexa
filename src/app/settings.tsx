@@ -55,38 +55,24 @@ export default function SettingsScreen() {
   const goToEditProfile = () => router.push('/edit-profile' as any);
   const goToPlan        = () => router.push('/plan' as any);
 
-  const handleSignOut = () => {
-    Alert.alert(
-      'Sign out',
-      'Are you sure you want to sign out of your SERVEXA workspace?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign out',
-          style: 'destructive',
-          onPress: async () => {
-            if (signingOut) return;
-            setSigningOut(true);
-            try {
-              // Clear device-level onboarding flag so next user starts fresh
-              await clearOnboardingFlag();
-              // Clear any pending profile data
-              try {
-                const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
-                await AsyncStorage.removeItem('servexa_pending_profile');
-              } catch { /* ignore */ }
-              // Sign out of Supabase — this clears the session and
-              // triggers SIGNED_OUT in useWorkspace, resetting state.
-              await supabase.auth.signOut();
-              router.replace('/welcome');
-            } catch (e) {
-              setSigningOut(false);
-              Alert.alert('Error', 'Could not sign out. Please try again.');
-            }
-          },
-        },
-      ]
-    );
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      // Clear device-level onboarding flag so next user starts fresh
+      await clearOnboardingFlag();
+      // Clear any pending profile data
+      try {
+        const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+        await AsyncStorage.removeItem('servexa_pending_profile');
+      } catch { /* ignore */ }
+      // Sign out of Supabase — triggers SIGNED_OUT in useWorkspace
+      await supabase.auth.signOut();
+      router.replace('/welcome');
+    } catch (e) {
+      setSigningOut(false);
+      Alert.alert('Error', 'Could not sign out. Please try again.');
+    }
   };
 
   return (
