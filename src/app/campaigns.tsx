@@ -288,16 +288,13 @@ export default function TeamScreen() {
             </Text>
             <Pressable
               style={styles.emptyBtn}
-              onPress={() => Alert.alert(
-                'Coming soon',
-                'Full employee creation is coming soon. For now, use Customers → Use a call template to run directed calls.'
-              )}
-              accessibilityLabel="Create AI employee"
+              onPress={() => router.push('/customers' as any)}
+              accessibilityLabel="Go to Customers to run a directed call"
             >
-              <Text style={styles.emptyBtnText}>+ Create AI employee</Text>
+              <Text style={styles.emptyBtnText}>Go to Customers →</Text>
             </Pressable>
             <Text style={styles.emptyHint}>
-              Tip: Use the Customers tab to run a directed call right now.
+              Run a directed call from the Customers tab.
             </Text>
           </View>
         ) : (
@@ -313,14 +310,11 @@ export default function TeamScreen() {
             {/* Add employee CTA */}
             <Pressable
               style={styles.addCard}
-              onPress={() => Alert.alert(
-                'Coming soon',
-                'Full employee creation is coming soon. For now, use Customers → Use a call template to run directed calls.'
-              )}
-              accessibilityLabel="Add AI employee"
+              onPress={() => router.push('/customers' as any)}
+              accessibilityLabel="Go to Customers to run a directed call"
             >
               <Text style={styles.addCardIcon}>+</Text>
-              <Text style={styles.addCardText}>Add AI employee</Text>
+              <Text style={styles.addCardText}>Run a directed call</Text>
             </Pressable>
           </View>
         )}
@@ -341,6 +335,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   contentMobile: {
+    // Reset desktop centering constraints so content fills the viewport width
+    maxWidth: undefined,
+    alignSelf: 'stretch',
     padding: 16,
     paddingBottom: 100,
   },
