@@ -6,9 +6,8 @@
  * On mobile (<768px):  full-screen content + bottom MobileNav
  */
 import { router, usePathname } from 'expo-router';
-import { ReactNode, useEffect } from 'react';
+import { ReactNode } from 'react';
 import {
-    Alert,
     Platform,
     Pressable,
     SafeAreaView,
@@ -20,7 +19,6 @@ import {
     useWindowDimensions,
 } from 'react-native';
 import { Colors, Fonts, Radius } from '../constants/theme';
-import { hasRealSession } from '../lib/supabase';
 import { useWorkspace } from '../lib/workspace';
 import MobileNav from './mobile-nav';
 import ServexaLogo from './servexa-logo';
@@ -46,12 +44,12 @@ export default function AppShell({ children, scrollable = true }: Props) {
   const isDesktop = width >= 768;
   const { profile, settings } = useWorkspace();
 
-  // Auth guard: redirect to /welcome if no real session
-  useEffect(() => {
-    hasRealSession().then((ok) => {
-      if (!ok) router.replace('/welcome');
-    });
-  }, [pathname]);
+  // Auth routing is handled exclusively by _layout.tsx.
+  // A redundant async guard here caused a race condition: when Supabase
+  // refreshes its token in the background, getSession() transiently returns
+  // null. The old guard fired router.replace('/welcome') during that window,
+  // racing against _layout's valid boot state and producing a blank screen
+  // on mobile tab switches (especially Overview).
 
   const displayName    = profile.company_name || 'My Workspace';
   const displayInitials = profile.initials    || '?';
