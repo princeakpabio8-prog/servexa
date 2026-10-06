@@ -60,7 +60,7 @@ export default function AppShell({ children, scrollable = true }: Props) {
     <View style={[styles.sidebar, isDesktop && styles.sidebarDesktop]}>
       <View style={styles.sidebarTop}>
         {/* Brand */}
-        <Pressable style={styles.brandRow} onPress={() => router.navigate('/')}>
+        <Pressable style={styles.brandRow} onPress={() => router.replace('/')}>
           <ServexaLogo variant="wordmark" width={170} />
         </Pressable>
 
@@ -93,7 +93,7 @@ export default function AppShell({ children, scrollable = true }: Props) {
             return (
               <Pressable
                 key={item.label}
-                onPress={() => router.navigate(item.route as any)}
+                onPress={() => router.replace(item.route as any)}
                 style={({ pressed }) => [
                   styles.navItem,
                   active && styles.navItemActive,
@@ -179,7 +179,7 @@ export default function AppShell({ children, scrollable = true }: Props) {
         {/* Mobile top bar */}
         <View style={styles.mobileTopBar}>
           <Pressable
-            onPress={() => router.navigate('/')}
+            onPress={() => router.replace('/')}
             accessibilityRole="button"
             accessibilityLabel="SERVEXA — go to Overview"
           >

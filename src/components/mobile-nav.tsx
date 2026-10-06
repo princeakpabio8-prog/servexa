@@ -46,7 +46,7 @@ export default function MobileNav() {
               styles.tab,
               pressed && styles.tabPressed,
             ]}
-            onPress={() => router.navigate(item.route as any)}
+            onPress={() => router.replace(item.route as any)}
             accessibilityRole="tab"
             accessibilityLabel={item.label}
             accessibilityState={{ selected: active }}
