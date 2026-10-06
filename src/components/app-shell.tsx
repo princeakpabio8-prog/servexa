@@ -178,7 +178,11 @@ export default function AppShell({ children, scrollable = true }: Props) {
       <View style={styles.mobileLayout}>
         {/* Mobile top bar */}
         <View style={styles.mobileTopBar}>
-          <Pressable onPress={() => router.navigate('/')}>
+          <Pressable
+            onPress={() => router.navigate('/')}
+            accessibilityRole="button"
+            accessibilityLabel="SERVEXA — go to Overview"
+          >
             <ServexaLogo variant="wordmark" width={120} />
           </Pressable>
           <Pressable

@@ -6,14 +6,13 @@ import {
     Alert,
     Linking,
     Pressable,
-    SafeAreaView,
     ScrollView,
-    StatusBar,
     StyleSheet,
     Text,
     View,
     useWindowDimensions,
 } from 'react-native';
+import AppShell from '../components/app-shell';
 import { Colors, Radius, Shadow } from '../constants/theme';
 import { ensureSession, supabase } from '../lib/supabase';
 
@@ -177,22 +176,38 @@ export default function CallDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <ActivityIndicator style={styles.loader} size="large" color={Colors.accent} />
-      </SafeAreaView>
+      <AppShell scrollable={false}>
+        <View style={styles.missing}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      </AppShell>
     );
   }
 
   if (!call) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <AppShell scrollable={false}>
         <View style={styles.missing}>
           <Text style={styles.missingTitle}>Call report unavailable</Text>
-          <Pressable style={styles.missingBtn} onPress={() => router.back()}>
-            <Text style={styles.missingBtnText}>Go back</Text>
+          <Text style={styles.missingBody}>
+            This call report could not be loaded. It may still be processing.
+          </Text>
+          <Pressable
+            style={styles.missingBtn}
+            onPress={() => loadReport()}
+            accessibilityLabel="Retry loading call report"
+          >
+            <Text style={styles.missingBtnText}>Retry</Text>
+          </Pressable>
+          <Pressable
+            style={styles.missingBtnSecondary}
+            onPress={() => router.back()}
+            accessibilityLabel="Go back"
+          >
+            <Text style={styles.missingBtnSecondaryText}>← Go back</Text>
           </Pressable>
         </View>
-      </SafeAreaView>
+      </AppShell>
     );
   }
 
@@ -202,15 +217,19 @@ export default function CallDetailScreen() {
   const pendingFollowUps = followUps.filter((f) => f.status !== 'completed');
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.ivory} />
+    <AppShell scrollable={false}>
       <ScrollView
         contentContainerStyle={[styles.content, !isMobile && styles.contentWide]}
         showsVerticalScrollIndicator={false}
       >
         {/* Top bar */}
         <View style={styles.topBar}>
-          <Pressable style={styles.backButton} onPress={() => router.back()}>
+          <Pressable
+            style={styles.backButton}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Text style={styles.backArrow}>‹</Text>
             <Text style={styles.backText}>Back</Text>
           </Pressable>
@@ -394,33 +413,31 @@ export default function CallDetailScreen() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </AppShell>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Colors.ivory,
-  },
-  loader: { flex: 1 },
   missing: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
-    gap: 16,
+    gap: 14,
   },
-  missingTitle: { color: Colors.ink, fontSize: 16, fontWeight: '700' },
+  missingTitle: { color: Colors.ink, fontSize: 16, fontWeight: '700', textAlign: 'center' },
+  missingBody: { color: Colors.inkMuted, fontSize: 13, textAlign: 'center', lineHeight: 19 },
   missingBtn: {
     backgroundColor: Colors.accent,
     borderRadius: Radius.md,
-    paddingHorizontal: 20,
-    paddingVertical: 11,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
   },
   missingBtnText: { color: Colors.surface, fontSize: 13, fontWeight: '700' },
+  missingBtnSecondary: { paddingVertical: 8 },
+  missingBtnSecondaryText: { color: Colors.accent, fontSize: 13, fontWeight: '600' },
 
   content: {
     padding: 16,

@@ -3,13 +3,11 @@ import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
     Platform,
     Pressable,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
     StyleSheet,
     Text,
     TextInput,
@@ -214,12 +212,20 @@ export default function EditProfileScreen() {
 
           {/* ── Avatar row ──────────────────────────────────────────────────── */}
           <View style={styles.avatarSection}>
-            <WorkspaceAvatar
-              avatarUrl={avatarUrl}
-              initials={displayInitials}
-              size={64}
-              radius={18}
-            />
+            {/* Avatar with upload-progress overlay */}
+            <View style={styles.avatarWrap}>
+              <WorkspaceAvatar
+                avatarUrl={avatarUrl}
+                initials={displayInitials}
+                size={64}
+                radius={18}
+              />
+              {avatarLoading && (
+                <View style={styles.avatarOverlay}>
+                  <ActivityIndicator size="small" color="#fff" />
+                </View>
+              )}
+            </View>
             <View style={styles.avatarActions}>
               <Text style={styles.avatarLabel}>WORKSPACE AVATAR</Text>
               <View style={styles.avatarBtns}>
@@ -293,21 +299,21 @@ export default function EditProfileScreen() {
             optional
           />
 
-          {/* Save button */}
+          {/* Save button — also disabled while avatar is uploading */}
           <Pressable
             style={({ pressed }) => [
               styles.saveBtn,
-              (!canSave || saving) && styles.saveBtnDisabled,
-              pressed && canSave && !saving && styles.saveBtnPressed,
+              (!canSave || saving || avatarLoading) && styles.saveBtnDisabled,
+              pressed && canSave && !saving && !avatarLoading && styles.saveBtnPressed,
               saved && styles.saveBtnSaved,
             ]}
             onPress={handleSave}
-            disabled={!canSave || saving}
+            disabled={!canSave || saving || avatarLoading}
             accessibilityRole="button"
             accessibilityLabel="Save workspace profile"
           >
-            <Text style={[styles.saveBtnText, (!canSave || saving) && styles.saveBtnTextDisabled]}>
-              {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save changes'}
+            <Text style={[styles.saveBtnText, (!canSave || saving || avatarLoading) && styles.saveBtnTextDisabled]}>
+              {avatarLoading ? 'Upload in progress…' : saving ? 'Saving…' : saved ? '✓ Saved' : 'Save changes'}
             </Text>
           </Pressable>
 
@@ -326,8 +332,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 8,
     marginBottom: 22,
+    // Prevent the row from forcing its parent wider than the viewport
+    minWidth: 0,
   },
   eyebrow:  { color: '#99A2AA', fontSize: 9, fontWeight: '900', letterSpacing: 1.3 },
   title:    { color: '#15232E', fontSize: 28, fontWeight: '900', marginTop: 5 },
@@ -363,6 +371,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+  },
+  avatarWrap: {
+    position: 'relative',
+    width: 64,
+    height: 64,
+  },
+  avatarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarActions: {
     flex: 1,

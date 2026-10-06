@@ -196,6 +196,7 @@ export default function DashboardScreen() {
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const loadDashboard = async (signal?: { cancelled: boolean }) => {
     try {
@@ -365,12 +366,14 @@ export default function DashboardScreen() {
       ]);
 
       if (signal?.cancelled) return;
+      setLoadError(false);
       setEmployees(employeeList);
       setAttention(attentionItems);
       setRecentCalls(recent);
     } catch (err) {
       if (signal?.cancelled) return;
       console.error('[Dashboard] load error:', err);
+      setLoadError(true);
     } finally {
       if (!signal?.cancelled) {
         setLoading(false);
@@ -431,16 +434,34 @@ export default function DashboardScreen() {
 
   const activeEmployeeCount = employees.filter((e) => e.status === 'active').length;
   // New workspace: no employees AND no calls yet
-  const isNewWorkspace = !loading && employees.length === 0 && recentCalls.length === 0;
+  const isNewWorkspace = !loading && !loadError && employees.length === 0 && recentCalls.length === 0;
 
-  // Show a centred spinner while the first load is in flight.
-  // This prevents the blank-white screen that appears on mobile
-  // when navigating back to Overview before data has arrived.
+  // Loading guard — prevents blank white screen on navigation
   if (loading && !refreshing) {
     return (
       <AppShell scrollable={false}>
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      </AppShell>
+    );
+  }
+
+  // Error state — data failed to load
+  if (loadError) {
+    return (
+      <AppShell scrollable={false}>
+        <View style={styles.loadingWrap}>
+          <Text style={styles.errorTitle}>Could not load dashboard</Text>
+          <Text style={styles.errorBody}>Check your connection and try again.</Text>
+          <Pressable
+            style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.8 }]}
+            onPress={() => { setLoading(true); setLoadError(false); loadDashboard(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading dashboard"
+          >
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </Pressable>
         </View>
       </AppShell>
     );
@@ -548,11 +569,7 @@ export default function DashboardScreen() {
             </Pressable>
           </View>
 
-          {loading ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Loading employees…</Text>
-            </View>
-          ) : employees.length === 0 ? (
+          {employees.length === 0 ? (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>No AI employees yet</Text>
               <Text style={styles.emptyBody}>
@@ -623,13 +640,19 @@ export default function DashboardScreen() {
             </Pressable>
           </View>
 
-          {loading ? (
+          {recentCalls.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Loading call activity…</Text>
-            </View>
-          ) : recentCalls.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyBody}>No calls recorded yet.</Text>
+              <Text style={styles.emptyTitle}>No calls yet</Text>
+              <Text style={styles.emptyBody}>
+                When your AI employees make calls, they'll appear here in real time.
+              </Text>
+              <Pressable
+                style={styles.emptyAction}
+                onPress={() => router.push('/customers' as any)}
+                accessibilityLabel="Go to Customers"
+              >
+                <Text style={styles.emptyActionText}>Start a call →</Text>
+              </Pressable>
             </View>
           ) : (
             <View style={styles.callList}>
@@ -669,6 +692,31 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 24,
+    gap: 12,
+  },
+  errorTitle: {
+    color: Colors.ink,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  errorBody: {
+    color: Colors.inkMuted,
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    marginTop: 4,
+    backgroundColor: Colors.accent,
+    borderRadius: Radius.md,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  retryBtnText: {
+    color: Colors.surface,
+    fontSize: 13,
+    fontWeight: '700',
   },
   scroll: {
     flex: 1,

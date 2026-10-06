@@ -209,6 +209,17 @@ export default function CallInstructionScreen() {
   return (
     <AppShell>
       <View style={styles.container}>
+        {/* Back / context header */}
+        <Pressable
+          style={styles.backRow}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Text style={styles.backArrow}>‹</Text>
+          <Text style={styles.backText}>Back</Text>
+        </Pressable>
+
         <Text style={styles.heading}>Human-Directed Call</Text>
         <Text style={styles.subheading}>Create a custom call with operator-provided instructions</Text>
 
@@ -458,6 +469,24 @@ const styles = StyleSheet.create({
   container: {
     // AppShell's mainContent already provides padding; no extra maxWidth
     // needed here — the shell's 1400px cap is sufficient on desktop.
+  },
+
+  backRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 16,
+    alignSelf: 'flex-start',
+  },
+  backArrow: {
+    color: Colors.accent,
+    fontSize: 26,
+    lineHeight: 28,
+  },
+  backText: {
+    color: Colors.accent,
+    fontSize: 13,
+    fontWeight: '700',
   },
 
   heading: {
