@@ -52,19 +52,26 @@ export async function clearOnboardingFlag() {
 const CAPABILITIES = [
   {
     icon: '◉',
-    title: 'AI Calls',
-    description: 'Intelligent voice conversations that handle routine customer interactions.',
+    title: 'AI Employees That Call',
+    description: 'SERVEXA AI employees handle outbound and inbound calls — qualifying leads, following up on orders, and managing routine customer interactions without a human agent.',
   },
   {
     icon: '↗',
-    title: 'Outcomes & Tracking',
-    description: 'Turn conversations into structured results and track what happened.',
+    title: 'Understand Every Conversation',
+    description: 'Every call is transcribed, summarised, and classified. Sentiment, intent, and key data are extracted automatically — no manual note-taking.',
   },
   {
     icon: '◷',
-    title: 'Campaign Management',
-    description: 'Organize and automate calling workflows from one place.',
+    title: 'Trigger Workflows & Actions',
+    description: 'Call outcomes drive real business actions: update CRM records, send follow-up messages, escalate to a human, or fire a custom workflow — automatically.',
   },
+];
+
+// ── How-it-works steps ────────────────────────────────────────────────────────
+const HOW_IT_WORKS = [
+  { step: '01', label: 'Listen', detail: 'AI employee places or takes the call, speaks naturally, and listens to the full conversation.' },
+  { step: '02', label: 'Understand', detail: 'Call is analysed in real time — intent, sentiment, and structured data extracted.' },
+  { step: '03', label: 'Act', detail: 'Outcomes trigger workflows: CRM updates, follow-ups, escalations, or custom automations.' },
 ];
 
 // ── Waveform bar — animates scale on native thread ──────────────────────────
@@ -111,7 +118,7 @@ function PhoneVisual() {
         <View style={styles.phoneNotch} />
         <View style={styles.callUI}>
           <Text style={styles.callBrand}>SERVEXA</Text>
-          <Text style={styles.callLabel}>Calling customer...</Text>
+          <Text style={styles.callLabel}>AI Employee · Active call</Text>
           <Text style={styles.callTimer}>00:18</Text>
           <View style={styles.waveform}>
             {bars.map((h, i) => (
@@ -133,6 +140,27 @@ function PhoneVisual() {
         </View>
       </View>
       <View style={styles.phoneHomeBar} />
+    </View>
+  );
+}
+
+// ── How-it-works step card ────────────────────────────────────────────────────
+function HowItWorksStep({ step, label, detail, isLast }: {
+  step: string;
+  label: string;
+  detail: string;
+  isLast?: boolean;
+}) {
+  return (
+    <View style={styles.howStep}>
+      <View style={styles.howStepLeft}>
+        <Text style={styles.howStepNum}>{step}</Text>
+        {!isLast && <View style={styles.howStepLine} />}
+      </View>
+      <View style={styles.howStepBody}>
+        <Text style={styles.howStepLabel}>{label}</Text>
+        <Text style={styles.howStepDetail}>{detail}</Text>
+      </View>
     </View>
   );
 }
@@ -210,16 +238,16 @@ export default function WelcomeScreen() {
         isMobileLayout ? styles.headline : styles.headlineDesktop,
         isNarrow && styles.headlineNarrow,
       ]}>
-        Your business{'\n'}
+        AI employees{'\n'}
         <Text style={[
           isMobileLayout ? styles.headlineItalic : styles.headlineItalicDesktop,
           isNarrow && styles.headlineNarrow,
-        ]}>has a voice.</Text>
+        ]}>for your business.</Text>
       </Text>
 
       {/* Subheadline */}
       <Text style={isMobileLayout ? styles.subheadline : styles.subheadlineDesktop}>
-        Super-intelligent voice agents that call, listen, understand and act for your business.
+        SERVEXA deploys AI employees that handle voice calls, understand every conversation, and trigger real business actions — automatically.
       </Text>
 
       {/* CTAs */}
@@ -260,8 +288,27 @@ export default function WelcomeScreen() {
   // ── Capabilities section (shared) ───────────────────────────────────────────
   const capabilitiesSection = (
     <View style={styles.capSection}>
+      {/* How it works strip */}
+      <View style={styles.howSection}>
+        <View style={styles.capSectionHeader}>
+          <View style={styles.eyebrowDot} />
+          <Text style={styles.capSectionLabel}>HOW IT WORKS</Text>
+        </View>
+        <View style={styles.howSteps}>
+          {HOW_IT_WORKS.map((s, i) => (
+            <HowItWorksStep
+              key={s.step}
+              step={s.step}
+              label={s.label}
+              detail={s.detail}
+              isLast={i === HOW_IT_WORKS.length - 1}
+            />
+          ))}
+        </View>
+      </View>
+
       {/* Section header */}
-      <View style={styles.capSectionHeader}>
+      <View style={[styles.capSectionHeader, styles.capSectionHeaderTop]}>
         <View style={styles.eyebrowDot} />
         <Text style={styles.capSectionLabel}>WHAT SERVEXA DOES</Text>
       </View>
@@ -276,15 +323,18 @@ export default function WelcomeScreen() {
       {/* Closing CTA */}
       <View style={styles.capCta}>
         <Text style={styles.capCtaHeading}>
-          Ready to give your business{'\n'}a voice?
+          Put AI employees{'\n'}to work.
+        </Text>
+        <Text style={styles.capCtaSubtext}>
+          Every call handled. Every outcome tracked. Every follow-up automated.
         </Text>
         <Pressable
           style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed, styles.capCtaBtn]}
           onPress={handleGetStarted}
-          accessibilityLabel="Get started"
+          accessibilityLabel="Get started with SERVEXA"
           accessibilityRole="button"
         >
-          <Text style={styles.primaryBtnText}>Get started</Text>
+          <Text style={styles.primaryBtnText}>Get started with SERVEXA</Text>
           <Text style={styles.primaryBtnArrow}>→</Text>
         </Pressable>
       </View>
@@ -807,6 +857,70 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
+  // ── How-it-works section ───────────────────────────────────────────────────
+  howSection: {
+    paddingBottom: 32,
+    marginBottom: 32,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+
+  howSteps: {
+    gap: 0,
+  },
+
+  howStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 16,
+    minHeight: 72,
+  },
+
+  howStepLeft: {
+    alignItems: 'center',
+    width: 32,
+    flexShrink: 0,
+  },
+
+  howStepNum: {
+    color: Colors.accent,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginTop: 2,
+  },
+
+  howStepLine: {
+    width: 1,
+    flex: 1,
+    backgroundColor: Colors.border,
+    marginTop: 6,
+    marginBottom: 0,
+    minHeight: 28,
+  },
+
+  howStepBody: {
+    flex: 1,
+    paddingBottom: 24,
+  },
+
+  howStepLabel: {
+    color: Colors.ink,
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+
+  howStepDetail: {
+    color: Colors.inkMuted,
+    fontSize: 13,
+    lineHeight: 20,
+  },
+
+  capSectionHeaderTop: {
+    marginTop: 0,
+  },
+
   // ── Closing CTA ────────────────────────────────────────────────────────────
   capCta: {
     marginTop: 36,
@@ -822,6 +936,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: Fonts?.serif ?? 'serif',
     letterSpacing: -0.3,
+    marginBottom: 8,
+  },
+
+  capCtaSubtext: {
+    color: Colors.inkMuted,
+    fontSize: 14,
+    lineHeight: 22,
     marginBottom: 20,
   },
 
