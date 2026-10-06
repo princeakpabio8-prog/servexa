@@ -226,10 +226,8 @@ export async function saveAvatar(
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) return { signedUrl: null, error: 'No authenticated session' };
 
-  const uid      = session.user.id;
-  const path     = `${uid}/avatar`;          // deterministic — one file per user
-  const ext      = mimeType.split('/')[1] ?? 'jpg';
-  const fileName = `avatar.${ext}`;
+  const uid  = session.user.id;
+  const path = `${uid}/avatar`; // deterministic — one file per user
 
   // Fetch the local file as a Blob (works on web + native via expo-file-system polyfill)
   let blob: Blob;
@@ -251,6 +249,7 @@ export async function saveAvatar(
 
   if (uploadError) {
     console.error('[saveAvatar] upload error:', uploadError);
+    // Provide a clear error so the UI can surface it
     return { signedUrl: null, error: uploadError.message };
   }
 
