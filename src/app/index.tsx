@@ -573,13 +573,13 @@ export default function DashboardScreen() {
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>No AI employees yet</Text>
               <Text style={styles.emptyBody}>
-                Create your first AI employee from the Team tab.
+                Create your first AI employee from the AI Employees tab.
               </Text>
               <Pressable
                 style={styles.emptyAction}
                 onPress={() => router.push('/campaigns' as any)}
               >
-                <Text style={styles.emptyActionText}>Go to Team →</Text>
+                <Text style={styles.emptyActionText}>Create AI employee →</Text>
               </Pressable>
             </View>
           ) : (

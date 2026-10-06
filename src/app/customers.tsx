@@ -633,11 +633,37 @@ export default function CustomersScreen() {
               </View>
             </View>
 
+            {/* Fix 5: "Use a call template" is now the primary action — it is the
+                full AI-directed call experience. The basic "Call customer" is secondary. */}
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: '/call-instruction' as any,
+                  params: {
+                    customerId: selected.uuid ?? '',
+                    customerName: selected.name,
+                    customerPhone: selected.phone,
+                  },
+                })
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Start a directed AI call"
+              style={({ pressed }) => [
+                styles.directedCallButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.directedCallButtonIcon}>◉</Text>
+              <Text style={styles.directedCallButtonText}>
+                Start AI call
+              </Text>
+            </Pressable>
+
             <Pressable
               onPress={callCustomer}
               disabled={callLoading}
               accessibilityRole="button"
-              accessibilityLabel={`Call ${selected.name}`}
+              accessibilityLabel={`Quick call ${selected.name}`}
               style={({ pressed }) => [
                 styles.callButton,
                 callLoading && styles.callButtonLoading,
@@ -654,35 +680,11 @@ export default function CustomersScreen() {
                 ]}
               >
                 <Text style={styles.callButtonIcon}>
-                  {callState === 'queued' ? '✓' : callLoading ? '◌' : '◉'}
+                  {callState === 'queued' ? '✓' : callLoading ? '◌' : '☎'}
                 </Text>
               </Animated.View>
               <Text style={styles.callButtonText}>
-                {callState === 'queued' ? 'Call queued' : callLoading ? 'Connecting...' : 'Call customer'}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() =>
-                router.push({
-                  pathname: '/call-instruction' as any,
-                  params: {
-                    customerId: selected.uuid ?? '',
-                    customerName: selected.name,
-                    customerPhone: selected.phone,
-                  },
-                })
-              }
-              accessibilityRole="button"
-              accessibilityLabel="Create directed call"
-              style={({ pressed }) => [
-                styles.directedCallButton,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.directedCallButtonIcon}>✎</Text>
-              <Text style={styles.directedCallButtonText}>
-                Use a call template
+                {callState === 'queued' ? 'Call queued' : callLoading ? 'Connecting...' : 'Quick call'}
               </Text>
             </Pressable>
           </View>
@@ -941,10 +943,10 @@ export default function CustomersScreen() {
     <AppShell>
             <View style={styles.header}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.eyebrow}>CUSTOMER CARE</Text>
+                <Text style={styles.eyebrow}>AI CALL OPERATIONS</Text>
                 <Text style={styles.heading}>Customers</Text>
                 <Text style={styles.subheading}>
-                  Manage relationships, conversations, and next actions.
+                  Add customers, initiate AI calls, and review call history.
                 </Text>
               </View>
 

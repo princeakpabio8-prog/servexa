@@ -27,11 +27,11 @@ import ServexaLogo from './servexa-logo';
 import WorkspaceAvatar from './workspace-avatar';
 
 const NAV_ITEMS = [
-  { icon: '⌂', label: 'Overview',  route: '/',          active: (p: string) => p === '/' },
-  { icon: '◉', label: 'Team',      route: '/campaigns', active: (p: string) => p.startsWith('/campaigns') || p.startsWith('/employee') },
-  { icon: '◎', label: 'Customers', route: '/customers', active: (p: string) => p.startsWith('/customers') || p.startsWith('/call') },
-  { icon: '◷', label: 'Activity',  route: '/activity',  active: (p: string) => p.startsWith('/activity') },
-  { icon: '⚙', label: 'Settings',  route: '/settings',  active: (p: string) => p.startsWith('/settings') },
+  { icon: '⌂', label: 'Overview',     route: '/',          active: (p: string) => p === '/' },
+  { icon: '◉', label: 'AI Employees', route: '/campaigns', active: (p: string) => p.startsWith('/campaigns') || p.startsWith('/employee') },
+  { icon: '◎', label: 'Customers',    route: '/customers', active: (p: string) => p.startsWith('/customers') || p.startsWith('/call') },
+  { icon: '◷', label: 'Activity',     route: '/activity',  active: (p: string) => p.startsWith('/activity') },
+  { icon: '⚙', label: 'Settings',     route: '/settings',  active: (p: string) => p.startsWith('/settings') },
 ] as const;
 
 type Props = {
@@ -136,7 +136,7 @@ export default function AppShell({ children, scrollable = true }: Props) {
           </View>
           <Text style={styles.managePlan}>Manage plan →</Text>
         </Pressable>
-        <Text style={styles.version}>SERVEXA v0.1</Text>
+        <Text style={styles.version}>SERVEXA</Text>
       </View>
     </View>
   );

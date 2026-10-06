@@ -210,7 +210,7 @@ export default function ActivityScreen() {
                 {!isMobile && (
                   <View style={styles.livePill}>
                     <View style={styles.liveDot} />
-                    <Text style={styles.liveText}>CALL-E LIVE</Text>
+                    <Text style={styles.liveText}>LIVE</Text>
                   </View>
                 )}
               </View>

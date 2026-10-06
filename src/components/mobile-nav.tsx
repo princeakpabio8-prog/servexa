@@ -16,11 +16,11 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Overview',  icon: '⌂',  route: '/',           paths: ['/'] },
-  { label: 'Team',      icon: '◉',  route: '/campaigns',  paths: ['/campaigns', '/employee'] },
-  { label: 'Customers', icon: '◎',  route: '/customers',  paths: ['/customers', '/call-detail', '/call-instruction'] },
-  { label: 'Activity',  icon: '◷',  route: '/activity',   paths: ['/activity'] },
-  { label: 'Settings',  icon: '⚙',  route: '/settings',   paths: ['/settings'] },
+  { label: 'Overview',     icon: '⌂',  route: '/',           paths: ['/'] },
+  { label: 'AI Employees', icon: '◉',  route: '/campaigns',  paths: ['/campaigns', '/employee'] },
+  { label: 'Customers',    icon: '◎',  route: '/customers',  paths: ['/customers', '/call-detail', '/call-instruction'] },
+  { label: 'Activity',     icon: '◷',  route: '/activity',   paths: ['/activity'] },
+  { label: 'Settings',     icon: '⚙',  route: '/settings',   paths: ['/settings'] },
 ];
 
 export default function MobileNav() {

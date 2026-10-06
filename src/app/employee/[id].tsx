@@ -477,19 +477,19 @@ export default function EmployeeDetailScreen() {
 
         {/* ── INSTRUCTIONS ───────────────────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Configuration</Text>
+          <Text style={styles.sectionTitle}>Instructions</Text>
           <View style={styles.configCard}>
             {employee.description ? (
               <Text style={styles.configText}>{employee.description}</Text>
             ) : (
-              <Text style={styles.configEmpty}>No description provided.</Text>
+              <Text style={styles.configEmpty}>No instructions set. Add a description when creating or editing this AI employee.</Text>
             )}
             <Pressable
               style={styles.configEditBtn}
               onPress={() => router.push('/campaigns' as any)}
-              accessibilityLabel="Edit instructions"
+              accessibilityLabel="Go to AI Employees to edit"
             >
-              <Text style={styles.configEditText}>Edit instructions →</Text>
+              <Text style={styles.configEditText}>Manage AI employees →</Text>
             </Pressable>
           </View>
         </View>

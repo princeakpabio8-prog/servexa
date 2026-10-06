@@ -220,8 +220,8 @@ export default function CallInstructionScreen() {
           <Text style={styles.backText}>Back</Text>
         </Pressable>
 
-        <Text style={styles.heading}>Human-Directed Call</Text>
-        <Text style={styles.subheading}>Create a custom call with operator-provided instructions</Text>
+        <Text style={styles.heading}>Start a Directed AI Call</Text>
+        <Text style={styles.subheading}>Choose a customer, select a call template, and let your AI employee handle the conversation</Text>
 
         {/* Step 1: Select Customer */}
         {(step === 'select_customer' || selectedCustomer) && (

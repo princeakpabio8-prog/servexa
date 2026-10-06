@@ -248,17 +248,21 @@ export default function CallDetailScreen() {
           <View style={styles.heroLeft}>
             <Text style={styles.eyebrow}>CALL REPORT</Text>
             <Text style={styles.customerName}>{customer?.name ?? 'Customer'}</Text>
+
+            {/* Fix 4: AI Employee attribution — elevated to primary context row */}
+            {employeeName && (
+              <View style={styles.employeeRow}>
+                <View style={styles.employeeRowDot} />
+                <Text style={styles.employeeRowLabel}>HANDLED BY</Text>
+                <Text style={styles.employeeRowName}>{employeeName}</Text>
+              </View>
+            )}
+
             {outcome?.outcome && (
               <View style={[styles.outcomePill, { backgroundColor: `${outcomeTone}18` }]}>
                 <Text style={[styles.outcomeLabel, { color: outcomeTone }]}>
                   {capitalise(outcome.outcome)}
                 </Text>
-              </View>
-            )}
-            {employeeName && (
-              <View style={styles.employeeTag}>
-                <Text style={styles.employeeTagIcon}>◉</Text>
-                <Text style={styles.employeeTagText}>{employeeName}</Text>
               </View>
             )}
           </View>
@@ -506,25 +510,35 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  employeeTag: {
+  // Fix 4: elevated employee attribution row (replaces small buried tag)
+  employeeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 8,
+    gap: 6,
+    marginTop: 10,
+    marginBottom: 2,
     alignSelf: 'flex-start',
     backgroundColor: Colors.accentLight,
-    borderRadius: Radius.full,
+    borderRadius: Radius.md,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 7,
   },
-  employeeTagIcon: {
-    color: Colors.accent,
-    fontSize: 10,
+  employeeRowDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: Colors.accent,
   },
-  employeeTagText: {
+  employeeRowLabel: {
     color: Colors.accentText,
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+  employeeRowName: {
+    color: Colors.accentText,
+    fontSize: 13,
+    fontWeight: '700',
   },
   heroMeta: {
     alignItems: 'flex-end',
