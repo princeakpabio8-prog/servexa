@@ -60,7 +60,7 @@ export default function AppShell({ children, scrollable = true }: Props) {
     <View style={[styles.sidebar, isDesktop && styles.sidebarDesktop]}>
       <View style={styles.sidebarTop}>
         {/* Brand */}
-        <Pressable style={styles.brandRow} onPress={() => router.replace('/')}>
+        <Pressable style={styles.brandRow} onPress={() => router.navigate('/')}>
           <ServexaLogo variant="wordmark" width={170} />
         </Pressable>
 
@@ -93,7 +93,7 @@ export default function AppShell({ children, scrollable = true }: Props) {
             return (
               <Pressable
                 key={item.label}
-                onPress={() => router.push(item.route as any)}
+                onPress={() => router.navigate(item.route as any)}
                 style={({ pressed }) => [
                   styles.navItem,
                   active && styles.navItemActive,
@@ -178,7 +178,7 @@ export default function AppShell({ children, scrollable = true }: Props) {
       <View style={styles.mobileLayout}>
         {/* Mobile top bar */}
         <View style={styles.mobileTopBar}>
-          <Pressable onPress={() => router.replace('/')}>
+          <Pressable onPress={() => router.navigate('/')}>
             <ServexaLogo variant="wordmark" width={120} />
           </Pressable>
           <Pressable
@@ -440,6 +440,9 @@ const styles = StyleSheet.create({
   // ── Main content ──────────────────────────────────────────────────────────
   main: {
     flex: 1,
+    // minWidth: 0 prevents a flex child from overflowing its parent on web
+    // when the child's content would otherwise force it wider than flex allows.
+    minWidth: 0,
     backgroundColor: Colors.ivory,
   },
 
@@ -463,6 +466,8 @@ const styles = StyleSheet.create({
   // ── Mobile layout ─────────────────────────────────────────────────────────
   mobileLayout: {
     flex: 1,
+    // Clip any accidental overflow from child content on narrow viewports
+    overflow: 'hidden',
     backgroundColor: Colors.ivory,
   },
 
