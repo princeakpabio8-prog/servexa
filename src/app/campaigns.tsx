@@ -594,7 +594,7 @@ export default function TeamScreen() {
   const handleCreated = (employee: Employee) => {
     setEmployees((prev) => [employee, ...prev]);
     // Navigate straight to the new employee's detail screen
-    router.push(`/employee/${employee.id}` as any);
+    router.push({ pathname: '/employee/[id]', params: { id: employee.id } });
   };
 
   const activeCount = employees.filter((e) => e.status === 'active').length;
@@ -668,7 +668,7 @@ export default function TeamScreen() {
               <EmployeeCard
                 key={emp.id}
                 emp={emp}
-                onPress={() => router.push(`/employee/${emp.id}` as any)}
+                onPress={() => router.push({ pathname: '/employee/[id]', params: { id: emp.id } })}
                 onToggle={() => handleToggle(emp)}
               />
             ))}

@@ -588,7 +588,7 @@ export default function DashboardScreen() {
                 <EmployeeCard
                   key={emp.id}
                   emp={emp}
-                  onPress={() => router.push(`/employee/${emp.id}` as any)}
+                  onPress={() => router.push({ pathname: '/employee/[id]', params: { id: emp.id } })}
                 />
               ))}
             </View>

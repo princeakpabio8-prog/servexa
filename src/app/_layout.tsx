@@ -11,9 +11,13 @@ import { StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors } from '../constants/theme';
 import { supabase } from '../lib/supabase';
-import { hasSeenOnboarding } from './welcome';
+import { hasSeenOnboarding, markOnboardingDone } from './welcome';
 
 type BootState = 'loading' | 'welcome' | 'app' | 'verify';
+
+// Stash the session email so the verify-email redirect can show it.
+let _pendingVerifyEmail = '';
+let _pendingVerifyName  = '';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -36,8 +40,23 @@ export default function RootLayout() {
         // Real session + onboarding done → dashboard
         next = 'app';
       } else {
-        // Real session but onboarding not done → they may be mid-verification
-        next = 'verify';
+        // Real session, onboarding flag missing.
+        // If the email is already confirmed (e.g. Supabase autoconfirm is on,
+        // or the user verified before this device set the flag), treat them as
+        // fully onboarded so they land on the dashboard instead of the blank
+        // verify-email screen.
+        const emailConfirmed = !!session?.user?.email_confirmed_at;
+        if (emailConfirmed) {
+          await markOnboardingDone();
+          next = 'app';
+        } else {
+          // Genuine pending-verification case — stash the email so the
+          // verify-email screen can show it even without route params.
+          _pendingVerifyEmail = session?.user?.email ?? '';
+          _pendingVerifyName  =
+            (session?.user?.user_metadata?.full_name as string | undefined) ?? '';
+          next = 'verify';
+        }
       }
 
       if (!cancelled) setBoot(next);
@@ -51,9 +70,16 @@ export default function RootLayout() {
     if (boot === 'welcome') {
       router.replace('/welcome');
     } else if (boot === 'verify') {
-      // Real session but onboarding not yet marked done.
-      // Send them to verify-email (they may have a pending email confirmation).
-      router.replace('/verify-email');
+      // Real session but email not yet confirmed.
+      // Pass the email (and name if available) so the verify-email screen
+      // is not blank when there are no route params from navigation.
+      router.replace({
+        pathname: '/verify-email' as any,
+        params: {
+          email: _pendingVerifyEmail,
+          name:  _pendingVerifyName,
+        },
+      });
     }
     // boot === 'app': filesystem default '/' is correct.
   }, [boot]);
